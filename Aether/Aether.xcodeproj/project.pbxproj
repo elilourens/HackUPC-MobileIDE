@@ -26,6 +26,14 @@
 		F200000000000000000000C1 /* CodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C1 /* CodeGenerator.swift */; };
 		F200000000000000000000C2 /* PreviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C2 /* PreviewRenderer.swift */; };
 		F200000000000000000000C3 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C3 /* Secrets.swift */; };
+		F200000000000000000000D0 /* IJTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D0 /* IJTheme.swift */; };
+		F200000000000000000000D1 /* MonacoEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D1 /* MonacoEditorView.swift */; };
+		F200000000000000000000D2 /* FileTreeSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D2 /* FileTreeSidebar.swift */; };
+		F200000000000000000000D3 /* AgentPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D3 /* AgentPanel.swift */; };
+		F200000000000000000000D4 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D4 /* SettingsSheet.swift */; };
+		F200000000000000000000D5 /* PhoneIDEView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D5 /* PhoneIDEView.swift */; };
+		F200000000000000000000D6 /* BackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D6 /* BackendClient.swift */; };
+		F200000000000000000000D7 /* GitHubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D7 /* GitHubClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +58,14 @@
 		F100000000000000000000C1 /* CodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeGenerator.swift; sourceTree = "<group>"; };
 		F100000000000000000000C2 /* PreviewRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRenderer.swift; sourceTree = "<group>"; };
 		F100000000000000000000C3 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		F100000000000000000000D0 /* IJTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IJTheme.swift; sourceTree = "<group>"; };
+		F100000000000000000000D1 /* MonacoEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonacoEditorView.swift; sourceTree = "<group>"; };
+		F100000000000000000000D2 /* FileTreeSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTreeSidebar.swift; sourceTree = "<group>"; };
+		F100000000000000000000D3 /* AgentPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPanel.swift; sourceTree = "<group>"; };
+		F100000000000000000000D4 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
+		F100000000000000000000D5 /* PhoneIDEView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneIDEView.swift; sourceTree = "<group>"; };
+		F100000000000000000000D6 /* BackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendClient.swift; sourceTree = "<group>"; };
+		F100000000000000000000D7 /* GitHubClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,6 +96,8 @@
 				F300000000000000000000A5 /* Voice */,
 				F300000000000000000000A6 /* Views */,
 				F300000000000000000000B0 /* Project */,
+				F300000000000000000000D0 /* PhoneIDE */,
+				F300000000000000000000D1 /* Backend */,
 				F300000000000000000000A7 /* Resources */,
 				F100000000000000000000AD /* Info.plist */,
 			);
@@ -160,6 +178,28 @@
 				F100000000000000000000C3 /* Secrets.swift */,
 			);
 			path = Project;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000D0 /* PhoneIDE */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000D0 /* IJTheme.swift */,
+				F100000000000000000000D1 /* MonacoEditorView.swift */,
+				F100000000000000000000D2 /* FileTreeSidebar.swift */,
+				F100000000000000000000D3 /* AgentPanel.swift */,
+				F100000000000000000000D4 /* SettingsSheet.swift */,
+				F100000000000000000000D5 /* PhoneIDEView.swift */,
+			);
+			path = PhoneIDE;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000D1 /* Backend */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000D6 /* BackendClient.swift */,
+				F100000000000000000000D7 /* GitHubClient.swift */,
+			);
+			path = Backend;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -249,6 +289,14 @@
 				F200000000000000000000C1 /* CodeGenerator.swift in Sources */,
 				F200000000000000000000C2 /* PreviewRenderer.swift in Sources */,
 				F200000000000000000000C3 /* Secrets.swift in Sources */,
+				F200000000000000000000D0 /* IJTheme.swift in Sources */,
+				F200000000000000000000D1 /* MonacoEditorView.swift in Sources */,
+				F200000000000000000000D2 /* FileTreeSidebar.swift in Sources */,
+				F200000000000000000000D3 /* AgentPanel.swift in Sources */,
+				F200000000000000000000D4 /* SettingsSheet.swift in Sources */,
+				F200000000000000000000D5 /* PhoneIDEView.swift in Sources */,
+				F200000000000000000000D6 /* BackendClient.swift in Sources */,
+				F200000000000000000000D7 /* GitHubClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

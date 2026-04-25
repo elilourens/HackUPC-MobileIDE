@@ -3,6 +3,8 @@ import SwiftUI
 struct WorkspaceHUD: View {
     @ObservedObject var sessionManager: ARSessionManager
     @ObservedObject var voiceManager: VoiceManager
+    /// Tap on the "Phone" pill returns to PhoneIDEView. Wired from ContentView.
+    var onRequestPhoneMode: (() -> Void)? = nil
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -96,6 +98,47 @@ struct WorkspaceHUD: View {
             // workspaceStarted boolean change, otherwise the overlay would just
             // pop out without easing.)
 
+            // Top-right "Phone" pill — taps return to the phone IDE. Decorative
+            // tinting matches the IntelliJ-Islands neutral palette.
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: { onRequestPhoneMode?() }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "iphone")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Phone")
+                                .font(.system(size: 11, weight: .semibold))
+                                .tracking(0.5)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
+                    }
+                    .padding(.top, 56)
+                    .padding(.trailing, 18)
+                }
+                Spacer()
+            }
+
+            // Preview-scroll arrows (right edge, vertically centered). Only shown
+            // when there's a live preview to scroll.
+            if sessionManager.hasLivePreview && sessionManager.workspaceStarted {
+                VStack(spacing: 12) {
+                    Button(action: { sessionManager.scrollPreview(dy: -300) }) {
+                        previewArrow(systemName: "chevron.up")
+                    }
+                    Button(action: { sessionManager.scrollPreview(dy: 300) }) {
+                        previewArrow(systemName: "chevron.down")
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                .padding(.trailing, 16)
+                .allowsHitTesting(true)
+            }
+
             // Corner-resize handles for the currently selected panel.
             ForEach(Array(sessionManager.selectedPanelCorners.enumerated()), id: \.offset) { idx, point in
                 CornerHandle(corner: idx)
@@ -134,6 +177,15 @@ struct WorkspaceHUD: View {
         case .fist: return "fist"
         case .thumbsUp: return "thumbs up"
         }
+    }
+
+    private func previewArrow(systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(.white)
+            .frame(width: 36, height: 36)
+            .background(Circle().fill(Color.black.opacity(0.55)))
+            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
     }
 
     private var transcriptDisplay: String {

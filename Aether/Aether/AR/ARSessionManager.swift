@@ -37,8 +37,20 @@ final class ARSessionManager: NSObject, ObservableObject {
     private var placementTransform: simd_float4x4?
 
     // MARK: Phase 2 — Live IDE
-    let session = ProjectSession()
+    /// Shared with PhoneIDEView. Owned at the App level so edits in either mode
+    /// flow into the other.
+    let session: ProjectSession
     private lazy var previewRenderer: PreviewRenderer = PreviewRenderer()
+
+    init(session: ProjectSession) {
+        self.session = session
+        super.init()
+    }
+
+    /// Callback fired when the user wants to leave AR mode and return to the phone IDE.
+    /// Wired by ContentView to flip the top-level phase.
+    var onRequestPhoneMode: (() -> Void)?
+
     /// When true, the next preview-pointing tap selects an element instead of toggling
     /// panel selection. Set by the "select" voice command.
     private var selectionArmed: Bool = false
@@ -525,7 +537,7 @@ final class ARSessionManager: NSObject, ObservableObject {
                 let startTime = CACurrentMediaTime()
                 // Don't show the preview yet — defer until the code lands so it
                 // can fly in (materialize) at the same moment as the rendered page.
-                CodeGenerator.shared.generate(prompt: prompt) { [weak self] result in
+                BackendClient.shared.generate(prompt: prompt, session: session) { [weak self] result in
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
                         switch result {
@@ -559,7 +571,7 @@ final class ARSessionManager: NSObject, ObservableObject {
                 appendTerminalLog(.command, trimmed)
                 appendTerminalLog(.info, "thinking…")
                 let startTime = CACurrentMediaTime()
-                CodeGenerator.shared.modify(currentCode: session.currentCode, prompt: prompt, selected: session.selectedElement) { [weak self] result in
+                let onModifyDone: (Result<String, Error>) -> Void = { [weak self] result in
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
                         switch result {
@@ -585,6 +597,18 @@ final class ARSessionManager: NSObject, ObservableObject {
                             self.appendTerminalLog(.error, "modification failed")
                         }
                     }
+                }
+                if let element = session.selectedElement {
+                    BackendClient.shared.modifyElement(prompt: prompt,
+                                                       currentCode: session.currentCode,
+                                                       element: element,
+                                                       session: session,
+                                                       completion: onModifyDone)
+                } else {
+                    BackendClient.shared.modify(prompt: prompt,
+                                                currentCode: session.currentCode,
+                                                session: session,
+                                                completion: onModifyDone)
                 }
             }
         case .selectElement:
@@ -731,6 +755,21 @@ final class ARSessionManager: NSObject, ObservableObject {
     /// Idempotent. Called by the "Let's start" overlay tap, and as a safety
     /// net at the top of handleVoiceCommand so a voice-first user is never
     /// stuck on an empty desk.
+    /// Scroll the AR preview WebView and refresh the preview panel texture.
+    /// Called by the HUD's preview-scroll arrow buttons. Positive `dy` scrolls down.
+    func scrollPreview(dy: CGFloat) {
+        guard !session.currentCode.isEmpty else { return }
+        previewRenderer.scrollBy(dy: dy) { [weak self] image in
+            guard let self = self, let image = image else { return }
+            self.panelManager?.setPreviewImage(image)
+        }
+    }
+
+    /// True when there's a live preview to scroll (used to gate the HUD arrows).
+    var hasLivePreview: Bool {
+        !session.currentCode.isEmpty
+    }
+
     func beginWorkspace() {
         guard !workspaceStarted else { return }
         workspaceStarted = true

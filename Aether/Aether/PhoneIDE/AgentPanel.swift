@@ -1,0 +1,280 @@
+import SwiftUI
+import Speech
+
+/// Agent chat panel under the editor. Header + scrollable message list + input bar
+/// with send + push-to-talk mic. Talks to BackendClient (with CodeGenerator fallback)
+/// for build/modify, and applies the resulting HTML straight back into ProjectSession.
+struct AgentPanel: View {
+    @ObservedObject var session: ProjectSession
+    @State private var draft: String = ""
+    @State private var collapsed: Bool = false
+    @State private var sttRecognizer = AgentSpeechRecognizer()
+    @State private var sttActive: Bool = false
+    @FocusState private var inputFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            if !collapsed {
+                chatScroll
+                inputBar
+            }
+        }
+        .background(IJ.bgSidebar)
+    }
+
+    // MARK: Header
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Circle().fill(IJ.accentBlue).frame(width: 8, height: 8)
+            Text("aether")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(IJ.textPrimary)
+            Spacer()
+            Text("gpt-4o")
+                .font(.system(size: 11))
+                .foregroundColor(IJ.textSecondary)
+            Button(action: { withAnimation(.easeOut(duration: 0.2)) { collapsed.toggle() } }) {
+                Image(systemName: collapsed ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(IJ.textSecondary)
+                    .frame(width: 28, height: 24)
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 32)
+        .background(IJ.bgSidebar)
+        .overlay(Rectangle().fill(IJ.border).frame(height: 1), alignment: .bottom)
+    }
+
+    // MARK: Chat list
+
+    private var chatScroll: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    if session.chatMessages.isEmpty {
+                        Text("Ask Aether to build something. Try: \"a landing page for a coffee subscription startup\".")
+                            .font(.system(size: 12))
+                            .foregroundColor(IJ.textSecondary)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 12)
+                    }
+                    ForEach(session.chatMessages) { msg in
+                        ChatMessageRow(msg: msg)
+                            .id(msg.id)
+                    }
+                    Color.clear.frame(height: 4).id("bottom")
+                }
+                .padding(.vertical, 8)
+            }
+            .onChange(of: session.chatMessages.count) { _ in
+                withAnimation(.easeOut(duration: 0.18)) {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
+            }
+        }
+        .background(IJ.bgSidebar)
+    }
+
+    // MARK: Input bar
+
+    private var inputBar: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(IJ.border).frame(height: 1)
+            HStack(spacing: 8) {
+                ZStack(alignment: .leading) {
+                    if draft.isEmpty {
+                        Text("Ask Aether…")
+                            .font(.system(size: 13))
+                            .foregroundColor(IJ.textDisabled)
+                            .padding(.leading, 12)
+                    }
+                    TextField("", text: $draft, axis: .vertical)
+                        .focused($inputFocused)
+                        .font(.system(size: 13))
+                        .foregroundColor(IJ.textPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .submitLabel(.send)
+                        .onSubmit(send)
+                        .lineLimit(1...4)
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(IJ.border, lineWidth: 1)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(IJ.bgInput))
+                )
+
+                // Mic — push to talk
+                Button {
+                    // Tap toggles dictation rather than press-and-hold; iOS gesture
+                    // recognition for hold inside SwiftUI button is fiddly enough
+                    // that tap-on / tap-off is more reliable for a hackathon demo.
+                    if sttActive {
+                        sttRecognizer.stop { final in
+                            sttActive = false
+                            if !final.isEmpty { draft = (draft.isEmpty ? final : draft + " " + final) }
+                        }
+                    } else {
+                        sttRecognizer.start { partial in
+                            draft = partial
+                        }
+                        sttActive = true
+                    }
+                } label: {
+                    Image(systemName: sttActive ? "mic.fill" : "mic")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(sttActive ? IJ.accentRed : IJ.textSecondary)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(IJ.bgInput))
+                        .overlay(Circle().stroke(IJ.border, lineWidth: 1))
+                }
+
+                // Send
+                Button(action: send) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(canSend ? IJ.accentBlue : IJ.scrollbar))
+                }
+                .disabled(!canSend)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .background(IJ.bgSidebar)
+    }
+
+    private var canSend: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !session.isGenerating
+    }
+
+    private func send() {
+        let prompt = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
+        draft = ""
+        inputFocused = false
+        if sttActive { sttRecognizer.stop { _ in }; sttActive = false }
+
+        session.appendChat(.user, prompt)
+        session.appendChat(.assistant, "thinking…")
+        session.isGenerating = true
+
+        let isModification = !session.currentCode.isEmpty
+        let onResult: (Result<String, Error>) -> Void = { result in
+            DispatchQueue.main.async {
+                session.isGenerating = false
+                switch result {
+                case .success(let html):
+                    session.setCode(html, forFile: session.currentFile.isEmpty ? "index.html" : session.currentFile,
+                                    pushHistory: isModification)
+                    session.replaceLastAssistantMessage(with:
+                        isModification
+                            ? "Updated \(session.currentFile)."
+                            : "Created \(session.currentFile). Tap Preview to see it.")
+                case .failure(let err):
+                    session.replaceLastAssistantMessage(with: "Failed: \(err.localizedDescription)")
+                }
+            }
+        }
+        if isModification {
+            BackendClient.shared.modify(prompt: prompt, currentCode: session.currentCode,
+                                        session: session, completion: onResult)
+        } else {
+            BackendClient.shared.generate(prompt: prompt, session: session, completion: onResult)
+        }
+    }
+}
+
+private struct ChatMessageRow: View {
+    let msg: ChatMessage
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            if msg.role == .user { Spacer(minLength: 32) }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(msg.text)
+                    .font(.system(size: 13))
+                    .foregroundColor(IJ.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(msg.role == .user ? IJ.bgSelected : IJ.bgEditor)
+            )
+            if msg.role == .assistant { Spacer(minLength: 32) }
+        }
+        .padding(.horizontal, 10)
+    }
+}
+
+/// Tiny SFSpeechRecognizer wrapper so the agent mic button doesn't have to
+/// reach into the AR-mode `VoiceManager` (which holds different state).
+@MainActor
+final class AgentSpeechRecognizer {
+    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private let audio = AVAudioEngine()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var task: SFSpeechRecognitionTask?
+    private var lastTranscript: String = ""
+    private var requestedAuth = false
+
+    func start(onPartial: @escaping (String) -> Void) {
+        ensureAuth { [weak self] ok in
+            guard ok, let self = self else { return }
+            self.startInternal(onPartial: onPartial)
+        }
+    }
+
+    func stop(completion: @escaping (String) -> Void) {
+        let final = lastTranscript
+        audio.stop()
+        audio.inputNode.removeTap(onBus: 0)
+        request?.endAudio()
+        task?.cancel()
+        task = nil
+        request = nil
+        completion(final)
+    }
+
+    private func ensureAuth(_ done: @escaping (Bool) -> Void) {
+        if SFSpeechRecognizer.authorizationStatus() == .authorized { done(true); return }
+        SFSpeechRecognizer.requestAuthorization { status in
+            DispatchQueue.main.async { done(status == .authorized) }
+        }
+    }
+
+    private func startInternal(onPartial: @escaping (String) -> Void) {
+        let audioSession = AVAudioSession.sharedInstance()
+        try? audioSession.setCategory(.playAndRecord, mode: .measurement,
+                                      options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
+        try? audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+        let req = SFSpeechAudioBufferRecognitionRequest()
+        req.shouldReportPartialResults = true
+        request = req
+        lastTranscript = ""
+
+        let input = audio.inputNode
+        let format = input.outputFormat(forBus: 0)
+        input.removeTap(onBus: 0)
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            self?.request?.append(buffer)
+        }
+
+        audio.prepare()
+        try? audio.start()
+
+        task = recognizer?.recognitionTask(with: req) { [weak self] result, _ in
+            guard let self = self, let result = result else { return }
+            let s = result.bestTranscription.formattedString
+            self.lastTranscript = s
+            DispatchQueue.main.async { onPartial(s) }
+        }
+    }
+}
