@@ -6,9 +6,8 @@ import AVFoundation
 final class JarvisVoice {
     static let shared = JarvisVoice()
 
-    // Provided by the user — embedded for hackathon demo only. Don't ship this in prod.
-    private let apiKey = "sk_c21daf75fcda4ae607d4d2eb015f35ea8148bc6de1f3de51"
-    private let voiceId = "lUTamkMw7gOzZbFIwmq4"
+    private let apiKey = Secrets.elevenLabsKey
+    private let voiceId = Secrets.elevenLabsVoiceId
 
     private let lock = NSLock()
     private var cache: [String: Data] = [:]

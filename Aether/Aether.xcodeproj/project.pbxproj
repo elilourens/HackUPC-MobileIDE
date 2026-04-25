@@ -25,6 +25,7 @@
 		F200000000000000000000C0 /* ProjectSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C0 /* ProjectSession.swift */; };
 		F200000000000000000000C1 /* CodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C1 /* CodeGenerator.swift */; };
 		F200000000000000000000C2 /* PreviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C2 /* PreviewRenderer.swift */; };
+		F200000000000000000000C3 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C3 /* Secrets.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +49,7 @@
 		F100000000000000000000C0 /* ProjectSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSession.swift; sourceTree = "<group>"; };
 		F100000000000000000000C1 /* CodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeGenerator.swift; sourceTree = "<group>"; };
 		F100000000000000000000C2 /* PreviewRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRenderer.swift; sourceTree = "<group>"; };
+		F100000000000000000000C3 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +157,7 @@
 				F100000000000000000000C0 /* ProjectSession.swift */,
 				F100000000000000000000C1 /* CodeGenerator.swift */,
 				F100000000000000000000C2 /* PreviewRenderer.swift */,
+				F100000000000000000000C3 /* Secrets.swift */,
 			);
 			path = Project;
 			sourceTree = "<group>";
@@ -245,6 +248,7 @@
 				F200000000000000000000C0 /* ProjectSession.swift in Sources */,
 				F200000000000000000000C1 /* CodeGenerator.swift in Sources */,
 				F200000000000000000000C2 /* PreviewRenderer.swift in Sources */,
+				F200000000000000000000C3 /* Secrets.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

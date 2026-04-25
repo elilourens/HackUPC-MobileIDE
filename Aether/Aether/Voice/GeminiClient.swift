@@ -4,8 +4,7 @@ import Foundation
 final class GeminiClient {
     static let shared = GeminiClient()
 
-    // Provided by the user — embedded for hackathon demo only.
-    private let apiKey = "AIzaSyBFCjjIhSflPOVS9jvw1H_60ULtQjI-Q0k"
+    private let apiKey = Secrets.geminiKey
 
     private init() {}
 
