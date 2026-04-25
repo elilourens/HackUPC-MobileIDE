@@ -10,6 +10,17 @@ enum Holo {
     static let cyanDim    = UIColor(red:   0,    green: 212/255, blue: 255/255, alpha: 0.55)
     static let cyanFaint  = UIColor(red:   0,    green: 212/255, blue: 255/255, alpha: 0.25)
     static let lightBlue  = UIColor(red:  88/255, green: 166/255, blue: 255/255, alpha: 1.0)
+
+    // IntelliJ Islands palette for ambient AR elements (replaces the cyan
+    // signature on the desk circle, git timeline, etc).
+    static let intelBlue       = UIColor(red:  74/255, green: 136/255, blue: 199/255, alpha: 1.00) // #4A88C7
+    static let intelBlueDim    = UIColor(red:  74/255, green: 136/255, blue: 199/255, alpha: 0.55)
+    static let intelBlueFaint  = UIColor(red:  74/255, green: 136/255, blue: 199/255, alpha: 0.20)
+    static let intelGreen      = UIColor(red:  89/255, green: 168/255, blue: 105/255, alpha: 1.00) // #59A869
+    static let intelGreenBright = UIColor(red: 110/255, green: 195/255, blue: 130/255, alpha: 1.00)
+    static let intelGrey       = UIColor(red: 111/255, green: 115/255, blue: 122/255, alpha: 0.85) // #6F737A
+    static let intelGreyFaint  = UIColor(red: 111/255, green: 115/255, blue: 122/255, alpha: 0.40)
+    static let intelText       = UIColor(red: 188/255, green: 190/255, blue: 196/255, alpha: 1.00) // #BCBEC4
     static let red        = UIColor(red:   1.0,  green: 0.30,    blue: 0.42,    alpha: 1.0)
     static let redDim     = UIColor(red:   1.0,  green: 0.30,    blue: 0.42,    alpha: 0.55)
     static let neonGreen  = UIColor(red:   0.43, green: 1.0,     blue: 0.69,    alpha: 1.0)
@@ -94,9 +105,11 @@ final class GitTimelineEntity: Entity {
     required override init() {
         super.init()
         let railLength: Float = 0.55
+        // IntelliJ palette: rail in #6F737A grey, commit nodes in #4A88C7 blue,
+        // latest in #59A869 green. Labels in #BCBEC4.
         let rail = ModelEntity(
             mesh: .generateBox(width: railLength, height: 0.0015, depth: 0.0015),
-            materials: [Holo.unlit(Holo.cyan.withAlphaComponent(0.55))]
+            materials: [Holo.unlit(Holo.intelGrey)]
         )
         addChild(rail)
 
@@ -108,41 +121,38 @@ final class GitTimelineEntity: Entity {
         ]
         for c in commits {
             let nodeR: Float = c.latest ? 0.012 : 0.0085
-            let nodeColor = c.latest ? Holo.cyanBright : Holo.cyanDim
+            let nodeColor = c.latest ? Holo.intelGreenBright : Holo.intelBlue
             let node = Holo.sphere(radius: nodeR, color: nodeColor)
             node.position = SIMD3<Float>(c.x, 0, 0)
             addChild(node)
             if c.latest { pulseNode = node }
 
-            // Outer ring around latest node
             if c.latest {
                 let ring = ModelEntity(
                     mesh: .generatePlane(width: nodeR * 5, height: nodeR * 5, cornerRadius: nodeR * 2.5),
-                    materials: [Holo.unlit(Holo.cyan.withAlphaComponent(0.20))]
+                    materials: [Holo.unlit(Holo.intelGreen.withAlphaComponent(0.22))]
                 )
                 ring.position = SIMD3<Float>(c.x, 0, -0.0005)
                 addChild(ring)
             }
 
-            let label = Holo.text(c.label, fontSize: 0.013, color: Holo.textWhite)
+            let label = Holo.text(c.label, fontSize: 0.013, color: Holo.intelText)
             label.position = SIMD3<Float>(c.x, 0.027, 0)
             addChild(label)
 
-            // Tiny hash dot under each commit
             let hash = Holo.text(String(format: "#%04x", abs(c.label.hashValue) & 0xFFFF),
-                                 fontSize: 0.008, weight: .regular, color: Holo.cyanDim)
+                                 fontSize: 0.008, weight: .regular, color: Holo.intelGrey)
             hash.position = SIMD3<Float>(c.x, -0.020, 0)
             addChild(hash)
         }
 
-        // Branch tick — a small downward stub to suggest a branched commit
         let branchStub = ModelEntity(
             mesh: .generateBox(width: 0.0015, height: 0.018, depth: 0.0015),
-            materials: [Holo.unlit(Holo.cyan.withAlphaComponent(0.45))]
+            materials: [Holo.unlit(Holo.intelGrey)]
         )
         branchStub.position = SIMD3<Float>(0.06, -0.012, 0)
         addChild(branchStub)
-        let branchSphere = Holo.sphere(radius: 0.006, color: Holo.cyanFaint)
+        let branchSphere = Holo.sphere(radius: 0.006, color: Holo.intelGreyFaint)
         branchSphere.position = SIMD3<Float>(0.06, -0.025, 0)
         addChild(branchSphere)
     }
@@ -439,14 +449,15 @@ final class AmbientCircleEntity: Entity {
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let r: CGFloat = 540
 
+            // IntelliJ-blue tinted at 20% — subtle, not in-your-face.
             // Outer thin ring
-            g.setStrokeColor(Holo.cyan.withAlphaComponent(0.55).cgColor)
+            g.setStrokeColor(Holo.intelBlue.withAlphaComponent(0.22).cgColor)
             g.setLineWidth(2)
             g.addArc(center: center, radius: r, startAngle: 0, endAngle: .pi * 2, clockwise: false)
             g.strokePath()
 
             // Inner faint ring
-            g.setStrokeColor(Holo.cyanFaint.cgColor)
+            g.setStrokeColor(Holo.intelBlueFaint.cgColor)
             g.setLineWidth(1)
             g.addArc(center: center, radius: r - 60, startAngle: 0, endAngle: .pi * 2, clockwise: false)
             g.strokePath()
@@ -456,14 +467,14 @@ final class AmbientCircleEntity: Entity {
                 let a = CGFloat(i) * .pi * 2 / 48 - .pi / 2
                 let inner: CGFloat = i % 4 == 0 ? r - 28 : r - 12
                 let outer: CGFloat = r
-                g.setStrokeColor(Holo.cyanDim.cgColor)
+                g.setStrokeColor(Holo.intelBlue.withAlphaComponent(0.20).cgColor)
                 g.setLineWidth(i % 4 == 0 ? 2 : 1)
                 g.move(to: CGPoint(x: center.x + cos(a) * inner, y: center.y + sin(a) * inner))
                 g.addLine(to: CGPoint(x: center.x + cos(a) * outer, y: center.y + sin(a) * outer))
                 g.strokePath()
             }
 
-            // Compass labels at N/E/S/W
+            // Compass labels at N/E/S/W (dim grey, JetBrains-style).
             let labelFont = UIFont.monospacedSystemFont(ofSize: 36, weight: .semibold)
             let labels: [(String, CGPoint)] = [
                 ("SYS", CGPoint(x: center.x, y: center.y - r + 8)),  // top
@@ -474,7 +485,7 @@ final class AmbientCircleEntity: Entity {
             for (label, point) in labels {
                 NSAttributedString(string: label, attributes: [
                     .font: labelFont,
-                    .foregroundColor: Holo.cyan,
+                    .foregroundColor: Holo.intelBlue.withAlphaComponent(0.55),
                     .kern: 4
                 ]).drawCentered(at: point)
             }
@@ -492,9 +503,9 @@ final class AmbientCircleEntity: Entity {
             ringPlane = plane
         }
 
-        // Four orbiting dots floating just above the ring
+        // Four orbiting dots floating just above the ring — IntelliJ blue 20%.
         for i in 0..<4 {
-            let dot = Holo.sphere(radius: 0.006, color: Holo.cyanBright)
+            let dot = Holo.sphere(radius: 0.006, color: Holo.intelBlue.withAlphaComponent(0.55))
             let a = Float(i) * .pi / 2
             dot.position = SIMD3<Float>(cos(a) * radius, 0.012, sin(a) * radius)
             addChild(dot)
