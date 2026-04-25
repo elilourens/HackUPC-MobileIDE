@@ -35,3 +35,17 @@ PYTHONPATH=. python3 tests/run_file_test.py sample.py
 PYTHONPATH=. python3 tests/run_file_test.py sample.py --voice
 PYTHONPATH=. python3 tests/run_file_test.py sample.py --question "Find security issues"
 ```
+
+### Ghost Conversation Mode
+
+Flow:
+1. Ask Ghost about code.
+2. Modify code.
+3. Ask a spoken or text follow-up.
+4. Ghost uses conversation context and code changes to respond.
+
+Run conversation mode test:
+
+```bash
+PYTHONPATH=. python3 tests/test_conversation_mode.py --voice
+```

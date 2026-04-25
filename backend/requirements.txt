@@ -3,6 +3,7 @@ uvicorn
 pydantic
 python-dotenv
 requests
+python-multipart
 openai
 motor
 pymongo

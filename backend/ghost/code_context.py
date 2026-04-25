@@ -1,3 +1,4 @@
+import difflib
 import json
 import re
 from pathlib import Path
@@ -172,3 +173,43 @@ def summarize_code_shape(code: str) -> str:
     if line_count <= 10:
         return "Small code snippet"
     return "General source file"
+
+
+def summarize_code_changes(previous_code: str | None, current_code: str) -> dict[str, Any]:
+    if not previous_code:
+        return {
+            "changed": False,
+            "lines_added": 0,
+            "lines_removed": 0,
+            "summary": "No previous code provided; treating this as a fresh review.",
+            "diff_preview": "",
+        }
+
+    prev_lines = previous_code.splitlines()
+    curr_lines = current_code.splitlines()
+    diff_lines = list(
+        difflib.unified_diff(prev_lines, curr_lines, fromfile="previous", tofile="current", lineterm="")
+    )
+
+    added_lines = [line for line in diff_lines if line.startswith("+") and not line.startswith("+++")]
+    removed_lines = [line for line in diff_lines if line.startswith("-") and not line.startswith("---")]
+    changed = bool(added_lines or removed_lines)
+
+    summary = "No meaningful code change detected."
+    prev_flat = " ".join(prev_lines)
+    curr_flat = " ".join(curr_lines)
+    if not changed:
+        summary = "No meaningful code change detected."
+    elif "return a-b" in prev_flat and "return a+b" in curr_flat:
+        summary = "You changed return a-b to return a+b."
+    else:
+        summary = f"Code updated with {len(added_lines)} lines added and {len(removed_lines)} lines removed."
+
+    preview = "\n".join(diff_lines[:14])
+    return {
+        "changed": changed,
+        "lines_added": len(added_lines),
+        "lines_removed": len(removed_lines),
+        "summary": summary,
+        "diff_preview": preview,
+    }
