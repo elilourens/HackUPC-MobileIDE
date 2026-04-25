@@ -11,7 +11,7 @@ from typing import Optional, Union
 
 from bson import ObjectId
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
@@ -233,6 +233,39 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     norm_a = math.sqrt(sum(x * x for x in a))
     norm_b = math.sqrt(sum(x * x for x in b))
     return dot / (norm_a * norm_b) if norm_a and norm_b else 0.0
+
+
+connected_clients: dict[str, Optional[WebSocket]] = {"ios": None, "plugin": None}
+latest_code: dict[str, str] = {}
+
+
+@app.websocket("/ws/sync")
+async def websocket_sync(websocket: WebSocket):
+    await websocket.accept()
+    client_type = None
+    try:
+        data = await websocket.receive_json()
+        client_type = data.get("type")
+        if client_type not in connected_clients:
+            await websocket.close()
+            return
+        connected_clients[client_type] = websocket
+
+        while True:
+            msg = await websocket.receive_json()
+            filename = msg.get("filename", "")
+            if filename:
+                latest_code[filename] = msg.get("code", "")
+            other = "plugin" if client_type == "ios" else "ios"
+            other_ws = connected_clients.get(other)
+            if other_ws:
+                try:
+                    await other_ws.send_json(msg)
+                except Exception:
+                    connected_clients[other] = None
+    except (WebSocketDisconnect, Exception):
+        if client_type:
+            connected_clients[client_type] = None
 
 
 @app.get("/health")
