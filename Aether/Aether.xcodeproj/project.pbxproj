@@ -141,6 +141,14 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		F300000000000000000000A8 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000AE /* Aether.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		F300000000000000000000B0 /* Project */ = {
 			isa = PBXGroup;
 			children = (
@@ -149,14 +157,6 @@
 				F100000000000000000000C2 /* PreviewRenderer.swift */,
 			);
 			path = Project;
-			sourceTree = "<group>";
-		};
-		F300000000000000000000A8 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				F100000000000000000000AE /* Aether.app */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

@@ -1492,74 +1492,187 @@ final class PanelManager {
     }
 
     // MARK: Terminal
+    /// Terminal panel rebranded as a Gemini CLI surface — 4-point sparkle, model
+    /// badge, prompt arrows. Same content (live terminal log lines), restyled.
     private func drawTerminal(in ctx: CGContext, size: CGSize) {
         drawJarvisBackground(ctx, size: size, dark: true)
 
-        let pad = max(20, min(size.width, size.height) * 0.05)
-        let titleFontSize = size.height * 0.060
-        let bodyFontSize = size.height * 0.075
+        let pad = max(20, min(size.width, size.height) * 0.045)
 
-        let titleFont = UIFont.systemFont(ofSize: titleFontSize, weight: .semibold)
+        let headerFontSize = size.height * 0.085
+        let badgeFontSize = size.height * 0.055
+        let bodyFontSize = size.height * 0.072
+
+        let headerFont = UIFont.systemFont(ofSize: headerFontSize, weight: .semibold)
+        let badgeFont = UIFont.monospacedSystemFont(ofSize: badgeFontSize, weight: .regular)
         let bodyFont = UIFont.monospacedSystemFont(ofSize: bodyFontSize, weight: .regular)
 
-        // JARVIS terminal: cyan title, neon-green prompt, cyan-grey output
-        let promptGreen = UIColor(red: 0.43, green: 1.00, blue: 0.69, alpha: 1)
-        let outputCyan  = UIColor(red: 0.55, green: 0.85, blue: 0.95, alpha: 1)
-        let successGreen = UIColor(red: 0.43, green: 0.90, blue: 0.69, alpha: 1)
-        let errorRed = UIColor(red: 1.0, green: 0.45, blue: 0.45, alpha: 1)
+        // Gemini-CLI palette (slightly different from JARVIS green-prompt scheme):
+        // - prompts in bright cyan (user input)
+        // - "thinking" / info in soft purple-blue
+        // - success in soft green
+        // - error in soft red
+        // - output in dim white
+        let promptCyan   = UIColor(red: 0.42, green: 0.86, blue: 1.00, alpha: 1)
+        let infoMauve    = UIColor(red: 0.78, green: 0.78, blue: 1.00, alpha: 0.92)
+        let successGreen = UIColor(red: 0.46, green: 0.92, blue: 0.66, alpha: 1)
+        let errorRed     = UIColor(red: 1.00, green: 0.50, blue: 0.50, alpha: 1)
+        let outputDim    = UIColor(red: 0.74, green: 0.78, blue: 0.85, alpha: 0.82)
 
+        // ---- Header row: sparkle + GEMINI + model badge -------------------
         var y: CGFloat = pad + 6
-        NSAttributedString(string: "TERMINAL", attributes: [
-            .font: titleFont,
-            .foregroundColor: Jarvis.cyan,
-            .kern: 3.0
-        ]).draw(at: CGPoint(x: pad + 18, y: y))
-        y += titleFontSize * 2.0
+        let sparkleR: CGFloat = headerFontSize * 0.46
+        let sparkleCenter = CGPoint(x: pad + 18 + sparkleR, y: y + sparkleR + 2)
+        drawGeminiSparkle(ctx, center: sparkleCenter, radius: sparkleR, color: Jarvis.cyan)
 
-        // Underline below header
+        let titleX = sparkleCenter.x + sparkleR + 14
+        NSAttributedString(string: "GEMINI", attributes: [
+            .font: headerFont,
+            .foregroundColor: Jarvis.cyan,
+            .kern: 4.0
+        ]).draw(at: CGPoint(x: titleX, y: y))
+
+        // Model badge (right-aligned).
+        let modelBadge = NSAttributedString(string: "gemini-2.0-flash", attributes: [
+            .font: badgeFont,
+            .foregroundColor: Jarvis.cyanDim,
+            .kern: 1.2
+        ])
+        let badgeWidth = modelBadge.size().width
+        let badgeRect = CGRect(
+            x: size.width - pad - badgeWidth - 22,
+            y: y + 2,
+            width: badgeWidth + 16,
+            height: badgeFontSize + 8
+        )
         ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
         ctx.setLineWidth(1)
-        ctx.move(to: CGPoint(x: pad, y: y - bodyFontSize * 0.4))
-        ctx.addLine(to: CGPoint(x: size.width - pad, y: y - bodyFontSize * 0.4))
+        ctx.stroke(badgeRect)
+        modelBadge.draw(at: CGPoint(x: badgeRect.minX + 8, y: badgeRect.minY + 4))
+
+        y += headerFontSize * 1.55
+
+        // Cyan separator under the header.
+        ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+        ctx.setLineWidth(1)
+        ctx.move(to: CGPoint(x: pad, y: y - 4))
+        ctx.addLine(to: CGPoint(x: size.width - pad, y: y - 4))
         ctx.strokePath()
 
+        // ---- Body lines ----------------------------------------------------
+        let bodyTop = y + 4
+        let bodyBottom = size.height - max(40, size.height * 0.10)
+
         if liveTerminalActive {
-            // Live terminal mode: render last 14 entries from liveTerminal
-            let linesToRender = Array(liveTerminal.suffix(14))
+            // Render the most recent N lines that fit. Compute capacity from the
+            // available body area + line height so the panel never clips text.
+            let lineHeight = bodyFontSize * 1.42
+            let capacity = max(3, Int((bodyBottom - bodyTop) / lineHeight))
+            let linesToRender = Array(liveTerminal.suffix(capacity))
+
+            var ly = bodyTop
             for terminalLine in linesToRender {
                 let color: UIColor
                 switch terminalLine.kind {
-                case .command: color = promptGreen
-                case .output: color = outputCyan
+                case .command: color = promptCyan
+                case .output:  color = outputDim
                 case .success: color = successGreen
-                case .error: color = errorRed
-                case .info: color = Jarvis.textDim
+                case .error:   color = errorRed
+                case .info:    color = infoMauve
                 }
                 NSAttributedString(string: terminalLine.text, attributes: [
                     .font: bodyFont,
                     .foregroundColor: color
-                ]).draw(at: CGPoint(x: pad + 4, y: y))
-                y += bodyFontSize * 1.4
+                ]).draw(at: CGPoint(x: pad + 6, y: ly))
+                ly += lineHeight
             }
         } else {
-            // Phase 1 demo: hardcoded npm output
-            let lines: [(String, UIColor)] = [
-                ("$ npm run dev",            promptGreen),
-                ("  compiled in 1.2s",        outputCyan),
-                ("  ready on localhost:3000", outputCyan),
-                ("$ █",                       promptGreen),
+            // Idle: show a Gemini-CLI welcome banner. Pure cosmetic.
+            let banner: [(String, UIColor)] = [
+                ("✦ welcome to gemini-cli", infoMauve),
+                ("  type a prompt or hold the mic to speak", outputDim),
+                ("> ", promptCyan),
             ]
-            for (text, color) in lines {
+            var ly = bodyTop
+            for (text, color) in banner {
                 NSAttributedString(string: text, attributes: [
                     .font: bodyFont,
                     .foregroundColor: color
-                ]).draw(at: CGPoint(x: pad + 4, y: y))
-                y += bodyFontSize * 1.4
+                ]).draw(at: CGPoint(x: pad + 6, y: ly))
+                ly += bodyFontSize * 1.42
             }
         }
 
-        drawSystemReadout(ctx, size: size, extra: "SHELL")
+        // ---- Footer status pill --------------------------------------------
+        // Pulses while we're "thinking" — heuristic: any line in the recent
+        // history starts with the sparkle prefix and we haven't yet logged a
+        // success/error after it.
+        let thinking = isTerminalThinking()
+        let footerText = thinking ? "[ THINKING ]" : "[ READY ]"
+        let footerColor: UIColor = thinking ? infoMauve : Jarvis.cyanDim
+        let footerFont = UIFont.monospacedSystemFont(ofSize: badgeFontSize * 0.85, weight: .medium)
+        let footerAttr = NSAttributedString(string: footerText, attributes: [
+            .font: footerFont,
+            .foregroundColor: footerColor,
+            .kern: 1.8
+        ])
+        let footerW = footerAttr.size().width
+        footerAttr.draw(at: CGPoint(x: pad + 6, y: size.height - pad - badgeFontSize - 6))
+
+        // Tokens-out approximation on the right.
+        let tokensApprox = approximateTokenCount()
+        let tokensStr = NSAttributedString(string: "↑ \(tokensApprox) tokens", attributes: [
+            .font: footerFont,
+            .foregroundColor: outputDim,
+            .kern: 1.0
+        ])
+        let tokensW = tokensStr.size().width
+        tokensStr.draw(at: CGPoint(x: size.width - pad - tokensW - 6,
+                                   y: size.height - pad - badgeFontSize - 6))
+        _ = footerW
+
+        drawSystemReadout(ctx, size: size, extra: "CLI")
         drawCornerBrackets(ctx, size: size)
+    }
+
+    /// 4-point sparkle (the Gemini logo signature). 8 vertices alternating outer
+    /// and inner radius gives a plump cross/star.
+    private func drawGeminiSparkle(_ ctx: CGContext, center: CGPoint, radius: CGFloat, color: UIColor) {
+        let path = CGMutablePath()
+        let outerR = radius
+        let innerR = radius * 0.34
+        for i in 0..<8 {
+            let angle = CGFloat(i) * .pi / 4 - .pi / 2
+            let r = i % 2 == 0 ? outerR : innerR
+            let x = center.x + cos(angle) * r
+            let y = center.y + sin(angle) * r
+            if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
+            else { path.addLine(to: CGPoint(x: x, y: y)) }
+        }
+        path.closeSubpath()
+        ctx.addPath(path)
+        ctx.setFillColor(color.cgColor)
+        ctx.fillPath()
+    }
+
+    /// "Thinking" if the most recent meaningful log line is a prompt-or-info
+    /// without a closing success/error after it.
+    private func isTerminalThinking() -> Bool {
+        for line in liveTerminal.reversed() {
+            switch line.kind {
+            case .success, .error: return false
+            case .command, .info:  return true
+            case .output:          continue
+            }
+        }
+        return false
+    }
+
+    /// Rough token estimate used for the footer counter. Just sums character
+    /// counts of all output lines and divides — close enough for cosmetic UI.
+    private func approximateTokenCount() -> Int {
+        let total = liveTerminal.reduce(0) { $0 + $1.text.count }
+        return total / 4
     }
 
     // MARK: Assistant bubble

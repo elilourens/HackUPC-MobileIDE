@@ -517,7 +517,12 @@ final class ARSessionManager: NSObject, ObservableObject {
                 // Fresh generation
                 session.isGenerating = true
                 JarvisVoice.shared.speak("On it sir.")
-                appendTerminalLog(.command, "generating index.html...")
+                // Gemini-CLI-style log: echo the user's prompt, then a thinking
+                // status line. (Trim the prompt to keep terminal layout sane.)
+                let trimmed = prompt.count > 64 ? String(prompt.prefix(64)) + "…" : prompt
+                appendTerminalLog(.command, trimmed)
+                appendTerminalLog(.info, "thinking…")
+                let startTime = CACurrentMediaTime()
                 // Don't show the preview yet — defer until the code lands so it
                 // can fly in (materialize) at the same moment as the rendered page.
                 CodeGenerator.shared.generate(prompt: prompt) { [weak self] result in
@@ -533,7 +538,8 @@ final class ARSessionManager: NSObject, ObservableObject {
                             self.panelManager?.setEditorCode(code, animated: true)
                             self.panelManager?.setLiveFiles(active: "index.html", files: Array(self.session.projectFiles.keys).sorted())
                             let lineCount = code.split(separator: "\n").count
-                            self.appendTerminalLog(.success, "generated \(lineCount) lines")
+                            let elapsed = CACurrentMediaTime() - startTime
+                            self.appendTerminalLog(.success, "generated \(lineCount) lines · \(String(format: "%.1f", elapsed))s")
                             self.loadAndApplyPreview(code: code, settleDelay: 0.6) {
                                 JarvisVoice.shared.speak("Preview is live.")
                                 self.appendTerminalLog(.success, "preview live")
@@ -549,7 +555,10 @@ final class ARSessionManager: NSObject, ObservableObject {
             } else {
                 // Modification
                 JarvisVoice.shared.speak("Updating.")
-                appendTerminalLog(.command, "modifying \(session.currentFile)...")
+                let trimmed = prompt.count > 64 ? String(prompt.prefix(64)) + "…" : prompt
+                appendTerminalLog(.command, trimmed)
+                appendTerminalLog(.info, "thinking…")
+                let startTime = CACurrentMediaTime()
                 CodeGenerator.shared.modify(currentCode: session.currentCode, prompt: prompt, selected: session.selectedElement) { [weak self] result in
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
@@ -563,11 +572,12 @@ final class ARSessionManager: NSObject, ObservableObject {
                                     self?.panelManager?.setPreviewImage(image)
                                 }
                             }
+                            let elapsed = CACurrentMediaTime() - startTime
+                            self.appendTerminalLog(.success, "updated · \(String(format: "%.1f", elapsed))s")
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                                 guard let self = self else { return }
                                 self.loadAndApplyPreview(code: newCode, settleDelay: 0.3) {
                                     JarvisVoice.shared.speak("Done.")
-                                    self.appendTerminalLog(.success, "updated")
                                 }
                             }
                         case .failure:

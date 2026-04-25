@@ -102,11 +102,11 @@ final class ProjectSession {
         }
     }
 
-    /// Convenience: prefix-aware constructors for the four common kinds the spec
-    /// describes ("$ ...", "✓ ...", "✗ ...", plain output).
-    func termCommand(_ text: String) { appendTerminal(.command, "$ " + text) }
+    /// Gemini-CLI-style prefixes. Commands (user prompts) get a chevron; status
+    /// lines get a sparkle; success/error stay as check/cross.
+    func termCommand(_ text: String) { appendTerminal(.command, "> " + text) }
     func termOutput(_ text: String) { appendTerminal(.output, "  " + text) }
     func termSuccess(_ text: String) { appendTerminal(.success, "✓ " + text) }
     func termError(_ text: String) { appendTerminal(.error, "✗ " + text) }
-    func termInfo(_ text: String) { appendTerminal(.info, text) }
+    func termInfo(_ text: String) { appendTerminal(.info, "✦ " + text) }
 }
