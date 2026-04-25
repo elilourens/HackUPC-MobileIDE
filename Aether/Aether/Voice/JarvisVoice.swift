@@ -39,21 +39,43 @@ final class JarvisVoice {
     }
 
     /// Pre-cache phrases without playing them. Useful at app start for canned lines.
+    /// Requests are SERIALIZED (not parallel) with a small inter-request delay so
+    /// we stay under ElevenLabs' rate limit. Earlier we fired all 16 phrases in
+    /// parallel and got blanket-429'd by the API.
     func preload(_ phrases: [String]) {
-        for phrase in phrases {
-            let key = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !key.isEmpty else { continue }
+        let normalized = phrases
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let toFetch = normalized.filter { key in
             lock.lock()
             let already = cache[key] != nil
             lock.unlock()
-            guard !already else { continue }
-            fetch(text: key) { [weak self] data in
-                guard let self = self, let data = data else { return }
-                self.lock.lock()
-                self.cache[key] = data
-                self.lock.unlock()
+            return !already
+        }
+        guard !toFetch.isEmpty else { return }
+
+        // Recursive serial worker: fetch phrase[i], then schedule phrase[i+1]
+        // 400ms after the response lands. Stays under the rate limit and keeps
+        // total preload time bounded (16 phrases × ~0.6s ≈ 10s, fully background).
+        let interRequestDelay: TimeInterval = 0.4
+        var index = 0
+        func next() {
+            guard index < toFetch.count else { return }
+            let key = toFetch[index]
+            index += 1
+            self.fetch(text: key) { [weak self] data in
+                guard let self = self else { return }
+                if let data = data {
+                    self.lock.lock()
+                    self.cache[key] = data
+                    self.lock.unlock()
+                }
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + interRequestDelay) {
+                    next()
+                }
             }
         }
+        next()
     }
 
     private func playOnMain(_ data: Data) {

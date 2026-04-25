@@ -448,9 +448,12 @@ final class PanelManager {
             let total = code.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).count
             animatedLineCount = 0
             regenerateEditor()
-            // Use a Timer scheduled on .main; per-tick we increment and regen.
-            let timer = Timer(timeInterval: 0.08, repeats: true) { [weak self] timer in
-                Task { @MainActor [weak self] in
+            // 0.15s/line — enough to feel like typing, low enough that the editor
+            // texture redraw (~12ms at 2500ppm) doesn't starve the main thread.
+            // The Timer's `block:` already runs on the runloop's thread (we add
+            // it to .main below), so no Task @MainActor wrapper is needed.
+            let timer = Timer(timeInterval: 0.15, repeats: true) { [weak self] timer in
+                MainActor.assumeIsolated {
                     guard let self = self else { timer.invalidate(); return }
                     let count = (self.animatedLineCount ?? 0) + 1
                     if count >= total {
@@ -667,7 +670,13 @@ final class PanelManager {
 
     // MARK: Texture rendering
     private func renderTexture(for kind: PanelKind, widthMeters: Float, heightMeters: Float) -> TextureResource? {
-        let pixelsPerMeter: CGFloat = 4500
+        // 2500 px/m keeps panels sharp at the ~50cm viewing distance the workspace
+        // sits at, while costing ~3× less CPU per redraw than the original 4500
+        // ppm. The typing animation regenerates the editor texture every tick, and
+        // at 4500 ppm a 0.50×0.36m editor was 3.6M pixels per redraw — enough to
+        // saturate the main thread and starve ARKit of camera frames (the
+        // "ARSession is retaining N ARFrames" warnings in the console).
+        let pixelsPerMeter: CGFloat = 2500
         let size = CGSize(width: max(256, CGFloat(widthMeters) * pixelsPerMeter),
                           height: max(128, CGFloat(heightMeters) * pixelsPerMeter))
         let renderer = UIGraphicsImageRenderer(size: size, format: {
