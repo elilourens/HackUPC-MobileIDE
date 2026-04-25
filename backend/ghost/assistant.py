@@ -1,4 +1,6 @@
-from typing import Any
+from __future__ import annotations
+
+from typing import Any, List, Optional
 
 from ghost.code_context import (
     detect_language,
@@ -107,8 +109,8 @@ def generate_ghost_reply(request: GhostChatRequest) -> dict[str, Any]:
 def generate_conversation_reply(
     transcript: str,
     current_code: str,
-    previous_code: str | None = None,
-    conversation_history: list[ConversationTurn] | None = None,
+    previous_code: Optional[str] = None,
+    conversation_history: Optional[List[ConversationTurn]] = None,
 ) -> dict[str, Any]:
     language = detect_language(current_code)
     current_context = extract_basic_context(current_code)

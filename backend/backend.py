@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import base64
 import json
 import math
@@ -5,7 +7,7 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from bson import ObjectId
 from dotenv import load_dotenv
@@ -92,7 +94,7 @@ class SearchResult(BaseModel):
     score: float
 
 
-def _to_bool(value: str | bool | None, default: bool) -> bool:
+def _to_bool(value: Optional[Union[str, bool]], default: bool) -> bool:
     if value is None:
         return default
     if isinstance(value, bool):
@@ -206,8 +208,8 @@ async def ghost_conversation(
     previous_code: Optional[str] = Form(None),
     transcript: Optional[str] = Form(None),
     conversation_history: Optional[str] = Form(None),
-    voice_enabled: str | bool | None = Form(True),
-    audio_file: UploadFile | None = File(None),
+    voice_enabled: Optional[Union[str, bool]] = Form(True),
+    audio_file: Optional[UploadFile] = File(None),
 ) -> GhostConversationResponse:
     final_transcript = (transcript or "").strip()
     transcription_error = None

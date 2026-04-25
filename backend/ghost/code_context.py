@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import difflib
 import json
 import re
@@ -175,7 +177,7 @@ def summarize_code_shape(code: str) -> str:
     return "General source file"
 
 
-def summarize_code_changes(previous_code: str | None, current_code: str) -> dict[str, Any]:
+def summarize_code_changes(previous_code: Optional[str], current_code: str) -> dict[str, Any]:
     if not previous_code:
         return {
             "changed": False,
