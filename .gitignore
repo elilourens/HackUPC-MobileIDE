@@ -19,3 +19,15 @@ node_modules/
 .idea/
 .vscode/
 *.swp
+
+# macOS
+.DS_Store
+
+# Xcode (per-user state — should never be in git)
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+*.xcscmblueprint
+*.xccheckout
+DerivedData/
+build/
