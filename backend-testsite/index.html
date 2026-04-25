@@ -89,8 +89,22 @@
     <!-- List images -->
     <div class="card">
       <h2>GET /images</h2>
+      <label>Sort</label>
+      <select id="list-sort" style="width:100%;padding:8px 10px;background:#111;border:1px solid #333;border-radius:6px;color:#e0e0e0;font-size:0.9rem">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+      </select>
       <button onclick="listImages()">List All</button>
       <div class="output" id="out-list"></div>
+    </div>
+
+    <!-- Delete image -->
+    <div class="card">
+      <h2>DELETE /images/:id</h2>
+      <label>Image ID</label>
+      <input type="text" id="delete-id" placeholder="MongoDB ObjectId" />
+      <button onclick="deleteImage()" style="background:#dc2626">Delete</button>
+      <div class="output" id="out-delete"></div>
     </div>
 
     <!-- Fetch image by ID -->
@@ -157,7 +171,14 @@
     }
 
     async function listImages() {
-      await req('GET', '/images', null, 'out-list');
+      const sort = document.getElementById('list-sort').value;
+      await req('GET', `/images?sort=${sort}`, null, 'out-list');
+    }
+
+    async function deleteImage() {
+      const id = document.getElementById('delete-id').value.trim();
+      if (!id) return alert('Enter an ID');
+      await req('DELETE', `/images/${id}`, null, 'out-delete');
     }
 
     async function fetchImage() {
