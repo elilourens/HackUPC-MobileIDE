@@ -60,25 +60,25 @@ final class PanelManager {
 
         // Desk-anchored frame: +Y is up, +Z points toward the user (we yawed the anchor in
         // ARSessionManager so this holds). Y centers are set so each panel's BOTTOM edge
-        // hovers ~3cm above the desk surface. Sizes are 2× the original layout.
-        let editorPanel = makePanel(kind: .editor, width: 0.50, height: 0.36, isDark: false)
-        editorPanel.position = SIMD3<Float>(0, 0.21, 0)
+        // hovers ~3cm above the desk surface. Both the editor and preview are 56×40 cm
+        // — a "two-page workspace" with the IDE on the left and the live preview on the
+        // right, mirroring each other across the user's center of view. The standalone
+        // file tree panel from Phase 1 is gone — file tree now lives as a sidebar inside
+        // the IDE panel (see drawEditor).
+        let editorPanel = makePanel(kind: .editor, width: 0.56, height: 0.40, isDark: false)
+        editorPanel.position = SIMD3<Float>(-0.32, 0.30, 0.20)
 
-        let fileTreePanel = makePanel(kind: .fileTree, width: 0.20, height: 0.30, isDark: false)
-        fileTreePanel.position = SIMD3<Float>(-0.36, 0.18, 0.04)
+        let terminalPanel = makePanel(kind: .terminal, width: 0.32, height: 0.16, isDark: true)
+        terminalPanel.position = SIMD3<Float>(0, 0.10, 0.42)
 
-        let terminalPanel = makePanel(kind: .terminal, width: 0.24, height: 0.20, isDark: true)
-        terminalPanel.position = SIMD3<Float>(0.38, 0.13, 0.04)
+        // Assistant bubble: a thin status bar high above the IDE+preview pair.
+        let assistantPanel = makePanel(kind: .assistant, width: 0.50, height: 0.08, isDark: false)
+        assistantPanel.position = SIMD3<Float>(0, 0.58, 0.10)
 
-        // Assistant bubble sits ABOVE the editor (was below). Editor top edge is at
-        // y = 0.21 + 0.18 = 0.39; place the bubble's center 5cm above that.
-        let assistantPanel = makePanel(kind: .assistant, width: 0.40, height: 0.09, isDark: false)
-        assistantPanel.position = SIMD3<Float>(0, 0.49, -0.02)
-
-        // Tilt all four "wall" panels ~15° so the top edge leans toward the user.
+        // Tilt all "wall" panels ~15° so the top edge leans toward the user.
         let tiltAngle: Float = 15 * .pi / 180
         let tilt = simd_quatf(angle: tiltAngle, axis: SIMD3<Float>(1, 0, 0))
-        for p in [editorPanel, fileTreePanel, terminalPanel, assistantPanel] {
+        for p in [editorPanel, terminalPanel, assistantPanel] {
             p.transform.rotation = tilt
             // Start every panel hidden + scaled to zero. They materialize via
             // materializeBasePanels() once the user taps "Let's start". This gives
@@ -95,12 +95,11 @@ final class PanelManager {
         //   file tree right edge ≈ -0.31, editor left/right ≈ ±0.25, terminal left edge ≈ +0.26.
         // Voice panels are pushed past those boundaries with a comfortable margin.
 
-        // Preview is THE dominant panel once code is generated. Default size 56×40 cm
-        // (well past the ≥40×30 spec). Initial position is far-right (kept for the
-        // legacy "show preview" voice command); enterLiveIDEMode() repositions it
-        // front-and-center when a real codegen run kicks in.
+        // Preview mirrors the IDE on the right. Same size (56×40 cm), same y/z, opposite x.
+        // enterLiveIDEMode() does final positioning for the live workflow but the initial
+        // values here let "show preview" voice command (Phase 1) still work standalone.
         let previewPanel = makePanel(kind: .preview, width: 0.56, height: 0.40, isDark: false)
-        previewPanel.position = SIMD3<Float>(0.80, 0.21, -0.03)
+        previewPanel.position = SIMD3<Float>(0.32, 0.30, 0.20)
         previewPanel.transform.rotation = tilt
         previewPanel.transform.scale = SIMD3<Float>(0.001, 0.001, 0.001)
         previewPanel.isEnabled = false
@@ -121,7 +120,6 @@ final class PanelManager {
         terryPanel.isEnabled = false
 
         anchor.addChild(editorPanel)
-        anchor.addChild(fileTreePanel)
         anchor.addChild(terminalPanel)
         anchor.addChild(assistantPanel)
         anchor.addChild(previewPanel)
@@ -129,7 +127,6 @@ final class PanelManager {
         anchor.addChild(terryPanel)
 
         panels[.editor] = editorPanel
-        panels[.fileTree] = fileTreePanel
         panels[.terminal] = terminalPanel
         panels[.assistant] = assistantPanel
         panels[.preview] = previewPanel
@@ -481,49 +478,40 @@ final class PanelManager {
         regeneratePreview()
     }
 
-    /// Switch the workspace into preview-dominant layout: editor / file tree / terminal
-    /// shrink and slide aside, preview drops into front-and-center, slightly elevated.
-    /// Idempotent — calling repeatedly has no visual effect after the first run.
+    /// Switch the workspace into the two-page live workflow: IDE on the left,
+    /// preview on the right (mirror), terminal centered below them. The IDE and
+    /// preview both stay at full scale — no shrinking. Idempotent.
     func enterLiveIDEMode() {
         guard !liveIDEModeActive else { return }
         liveIDEModeActive = true
 
         let dur: TimeInterval = 0.55
 
-        // Editor: shrink to ~65% and slide left.
+        // IDE panel: front-left at full size.
         if let editor = panels[.editor], let parent = editor.parent {
             let target = Transform(
-                scale: SIMD3<Float>(0.65, 0.65, 1.0),
+                scale: SIMD3<Float>(1, 1, 1),
                 rotation: editor.transform.rotation,
-                translation: SIMD3<Float>(-0.42, 0.18, 0)
+                translation: SIMD3<Float>(-0.32, 0.30, 0.20)
             )
             editor.move(to: target, relativeTo: parent, duration: dur, timingFunction: .easeInOut)
         }
 
-        // File tree: shrink to 85% and tuck further left.
-        if let tree = panels[.fileTree], let parent = tree.parent {
-            let target = Transform(
-                scale: SIMD3<Float>(0.85, 0.85, 1.0),
-                rotation: tree.transform.rotation,
-                translation: SIMD3<Float>(-0.74, 0.18, 0.04)
-            )
-            tree.move(to: target, relativeTo: parent, duration: dur, timingFunction: .easeInOut)
-        }
-
-        // Terminal: shrink slightly and stay on the right.
+        // Terminal: centered below the IDE/preview pair, pushed forward so it
+        // reads as a desk-level inspector rather than a wall panel.
         if let terminal = panels[.terminal], let parent = terminal.parent {
             let target = Transform(
-                scale: SIMD3<Float>(0.95, 0.95, 1.0),
+                scale: SIMD3<Float>(1, 1, 1),
                 rotation: terminal.transform.rotation,
-                translation: SIMD3<Float>(0.46, 0.13, 0.04)
+                translation: SIMD3<Float>(0, 0.10, 0.42)
             )
             terminal.move(to: target, relativeTo: parent, duration: dur, timingFunction: .easeInOut)
         }
 
-        // Preview: front-and-center, slightly elevated. Reposition only — show
-        // animation runs separately via materializePreview().
+        // Preview: front-right (mirror of IDE). Reposition only — show animation
+        // runs separately via materializePreview().
         if let preview = panels[.preview] {
-            preview.position = SIMD3<Float>(0, 0.30, 0.20)
+            preview.position = SIMD3<Float>(0.32, 0.30, 0.20)
         }
     }
 
@@ -540,8 +528,7 @@ final class PanelManager {
         let order: [(PanelKind, TimeInterval)] = [
             (.assistant, 0.00),
             (.editor,    0.18),
-            (.fileTree,  0.36),
-            (.terminal,  0.54),
+            (.terminal,  0.36),
         ]
         for (kind, delay) in order {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
@@ -611,12 +598,13 @@ final class PanelManager {
         }
     }
 
-    /// Switch the file tree to live mode and render the given files (active file
-    /// highlighted in cyan).
+    /// Update the file list shown in the IDE's left sidebar. Active file is
+    /// highlighted in cyan. (The standalone file tree panel from Phase 1 is
+    /// gone — files now render inside the editor panel itself.)
     func setLiveFiles(active: String, files: [String]) {
         liveActiveFile = active
         liveFiles = files
-        regenerateFileTree()
+        regenerateEditor()
     }
 
     /// Switch the terminal to live mode and render the given log lines.
@@ -628,7 +616,6 @@ final class PanelManager {
 
     private func refreshAllTextures() {
         regenerateEditor()
-        regenerateFileTree()
         regenerateTerminal()
         regenerateAssistant()
     }
@@ -866,65 +853,161 @@ final class PanelManager {
     }
 
     // MARK: Editor renderer
+    /// VS Code-style IDE renderer: file tree sidebar on the left, tab bar + code on
+    /// the right. Preserves the JARVIS holographic theme (corner brackets, scan
+    /// lines, cyan accents) but reorganises the layout to feel like a real IDE
+    /// rather than a single-column text dump. Backwards-compatible with Phase 1:
+    /// when `liveCode` is nil, it shows the original React snippet on the right
+    /// and a default file list on the left.
     private func drawEditor(in ctx: CGContext, size: CGSize) {
         drawJarvisBackground(ctx, size: size)
 
         let outerPad = max(20, min(size.width, size.height) * 0.04)
-        let tabBarHeight: CGFloat = size.height * 0.085
-        let tabBarRect = CGRect(x: outerPad, y: outerPad + 6, width: size.width - outerPad * 2, height: tabBarHeight)
 
-        // Tab bar separator line (cyan)
+        // Layout: left sidebar (~22% width) | vertical separator | code area
+        let sidebarWidth = (size.width - outerPad * 2) * 0.22
+        let separatorX = outerPad + sidebarWidth + 14
+        let codeAreaLeft = separatorX + 14
+        let workTop = outerPad + 6
+        let workBottom = size.height - max(40, size.height * 0.06)  // room for system readout
+
+        // Sidebar background: 6% darker tint than the main panel bg so the two
+        // halves read as distinct without screaming.
+        let sidebarBg = (theme == .dark
+            ? UIColor(red:  4/255, green:  7/255, blue: 14/255, alpha: 0.55)
+            : UIColor(red: 232/255, green: 238/255, blue: 248/255, alpha: 0.55))
+        sidebarBg.setFill()
+        ctx.fill(CGRect(x: outerPad, y: workTop, width: sidebarWidth, height: workBottom - workTop))
+
+        // Vertical separator (cyan, soft).
         ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
         ctx.setLineWidth(1)
-        ctx.move(to: CGPoint(x: outerPad, y: tabBarRect.maxY + 1))
-        ctx.addLine(to: CGPoint(x: size.width - outerPad, y: tabBarRect.maxY + 1))
+        ctx.move(to: CGPoint(x: separatorX, y: workTop))
+        ctx.addLine(to: CGPoint(x: separatorX, y: workBottom))
         ctx.strokePath()
 
-        let tabFontSize = tabBarHeight * 0.50
-        let tabFont = UIFont.systemFont(ofSize: tabFontSize, weight: .medium)
+        // ---- Sidebar: EXPLORER label + file rows ----------------------------
+        let sidebarFontSize = max(11, size.height * 0.026)
+        let sidebarLabelFontSize = max(11, size.height * 0.022)
+        let labelFont = UIFont.systemFont(ofSize: sidebarLabelFontSize, weight: .semibold)
+        let fileFont = UIFont.monospacedSystemFont(ofSize: sidebarFontSize, weight: .regular)
 
-        // Determine tabs and active tab
-        let (tabs, activeTabIndex): ([String], Int) = if let live = liveCode, let activeFile = liveActiveFile {
-            ([activeFile], 0)
+        var sy: CGFloat = workTop + 14
+        NSAttributedString(string: "EXPLORER", attributes: [
+            .font: labelFont,
+            .foregroundColor: Jarvis.cyan,
+            .kern: 2.6
+        ]).draw(at: CGPoint(x: outerPad + 14, y: sy))
+        sy += sidebarLabelFontSize * 2.0
+
+        // Faint horizontal divider under the section header.
+        ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+        ctx.setLineWidth(0.6)
+        ctx.move(to: CGPoint(x: outerPad + 8, y: sy - 6))
+        ctx.addLine(to: CGPoint(x: outerPad + sidebarWidth - 8, y: sy - 6))
+        ctx.strokePath()
+
+        // Resolve which files to show + which is active.
+        let sidebarFiles: [String]
+        let activeFile: String?
+        if !liveFiles.isEmpty, let active = liveActiveFile {
+            sidebarFiles = liveFiles
+            activeFile = active
+        } else if let live = liveActiveFile {
+            sidebarFiles = [live]
+            activeFile = live
         } else {
-            (["Login.tsx", "App.tsx"], activeTab)
+            sidebarFiles = ["Login.tsx", "App.tsx", "index.css", "utils.ts"]
+            activeFile = "Login.tsx"
         }
 
-        var x = tabBarRect.minX
-        for (i, t) in tabs.enumerated() {
-            let isActive = (i == activeTabIndex)
-            let attrs: [NSAttributedString.Key: Any] = [
+        for file in sidebarFiles {
+            let isActive = (file == activeFile)
+            let rowH = sidebarFontSize * 1.65
+            let rowRect = CGRect(x: outerPad + 6, y: sy - 4, width: sidebarWidth - 12, height: rowH)
+
+            if isActive {
+                // Active row: faint cyan tint + cyan accent strip on the left.
+                ctx.setFillColor(Jarvis.cyan.withAlphaComponent(0.10).cgColor)
+                ctx.fill(rowRect)
+                ctx.setFillColor(Jarvis.cyan.cgColor)
+                ctx.fill(CGRect(x: rowRect.minX, y: rowRect.minY, width: 2.5, height: rowRect.height))
+            }
+
+            // File icon: small filled cyan dot (active) or hollow ring (inactive).
+            let iconR: CGFloat = sidebarFontSize * 0.20
+            let iconY = sy + sidebarFontSize * 0.45
+            let iconX = outerPad + 16
+            if isActive {
+                ctx.setFillColor(Jarvis.cyan.cgColor)
+                ctx.fillEllipse(in: CGRect(x: iconX, y: iconY - iconR, width: iconR * 2, height: iconR * 2))
+            } else {
+                ctx.setStrokeColor(Jarvis.cyanDim.cgColor)
+                ctx.setLineWidth(1)
+                ctx.strokeEllipse(in: CGRect(x: iconX, y: iconY - iconR, width: iconR * 2, height: iconR * 2))
+            }
+
+            // File name. Truncate by allowing the row to clip — the sidebar is
+            // intentionally narrow.
+            let color: UIColor = isActive ? Jarvis.cyan : Jarvis.textPrimary
+            NSAttributedString(string: file, attributes: [
+                .font: fileFont,
+                .foregroundColor: color
+            ]).draw(at: CGPoint(x: outerPad + 16 + iconR * 2 + 8, y: sy))
+            sy += rowH
+            if sy > workBottom - rowH { break }
+        }
+
+        // ---- Code area: tab bar then code ----------------------------------
+        let tabBarHeight: CGFloat = size.height * 0.075
+        let tabBarRect = CGRect(
+            x: codeAreaLeft,
+            y: workTop,
+            width: size.width - codeAreaLeft - outerPad,
+            height: tabBarHeight
+        )
+
+        // Tab separator line.
+        ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+        ctx.setLineWidth(1)
+        ctx.move(to: CGPoint(x: tabBarRect.minX, y: tabBarRect.maxY + 1))
+        ctx.addLine(to: CGPoint(x: tabBarRect.maxX, y: tabBarRect.maxY + 1))
+        ctx.strokePath()
+
+        let tabFontSize = tabBarHeight * 0.46
+        let tabFont = UIFont.systemFont(ofSize: tabFontSize, weight: .medium)
+        let displayedTabs: [String] = activeFile.map { [$0] } ?? ["Login.tsx", "App.tsx"]
+        let activeTabIdx = activeFile == nil ? activeTab : 0
+
+        var tx = tabBarRect.minX + 6
+        for (i, t) in displayedTabs.enumerated() {
+            let isActive = (i == activeTabIdx)
+            let attr = NSAttributedString(string: t, attributes: [
                 .font: tabFont,
                 .foregroundColor: isActive ? Jarvis.cyan : Jarvis.textDim,
                 .kern: 1.0
-            ]
-            let attr = NSAttributedString(string: t, attributes: attrs)
+            ])
             let w = attr.size().width
-            attr.draw(at: CGPoint(x: x, y: tabBarRect.midY - tabFontSize / 1.6))
+            attr.draw(at: CGPoint(x: tx, y: tabBarRect.midY - tabFontSize / 1.6))
             if isActive {
                 ctx.setFillColor(Jarvis.cyan.cgColor)
-                ctx.fill(CGRect(x: x, y: tabBarRect.maxY - 3, width: w, height: 2.5))
+                ctx.fill(CGRect(x: tx, y: tabBarRect.maxY - 3, width: w, height: 2.5))
             }
-            x += w + 36
+            tx += w + 28
         }
 
-        // Code area starts below tab bar.
-        let codeTop = tabBarRect.maxY + 18
-        let codeBottom = size.height - max(40, size.height * 0.06)  // leave room for system readout
+        // Code area geometry.
+        let codeTop = tabBarRect.maxY + 14
+        let codeBottom = workBottom
         let codeFontSize = (codeBottom - codeTop) / 22
         let codeFont = UIFont.monospacedSystemFont(ofSize: codeFontSize, weight: .regular)
-        let lineNumWidth: CGFloat = codeFontSize * 2.6
-        let xCode = outerPad + lineNumWidth + 12
+        let lineNumWidth: CGFloat = codeFontSize * 2.4
+        let xCodeLeft = codeAreaLeft
+        let xCodeText = xCodeLeft + lineNumWidth + 10
         var y = codeTop
 
         if let live = liveCode {
-            // Live code rendering with HTML/CSS/JS tokenization
             let allLines = live.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
-
-            // Determine the slice of lines to draw. During the typing animation we
-            // always render from line 0 up to animatedLineCount (no scroll). When
-            // fully typed we honor editorScrollOffset and render a window of lines
-            // starting there.
             let firstLine: Int
             let lastLine: Int
             if let count = animatedLineCount {
@@ -932,14 +1015,12 @@ final class PanelManager {
                 lastLine = min(count, allLines.count)
             } else {
                 firstLine = min(max(0, editorScrollOffset), max(0, allLines.count - 1))
-                // Visible cap based on the same denominator drawEditor uses for font sizing.
                 let visibleCap = max(8, Int((codeBottom - codeTop) / (codeFontSize * 1.42)))
                 lastLine = min(allLines.count, firstLine + visibleCap + 4)
             }
             let linesToRender = firstLine < lastLine ? Array(allLines[firstLine..<lastLine]) : []
 
-            // Replay language state from the very first line so blocks beginning
-            // before the scroll window still color correctly.
+            // Replay language state for blocks that started before the scroll window.
             var currentLang: WebLang = .html
             for skipped in allLines.prefix(firstLine) {
                 if skipped.contains("<style") { currentLang = .css }
@@ -950,41 +1031,26 @@ final class PanelManager {
 
             for (relIdx, line) in linesToRender.enumerated() {
                 let absIdx = firstLine + relIdx
-                // Track style and script tags
-                if line.contains("<style") {
-                    currentLang = .css
-                } else if line.contains("</style>") {
-                    currentLang = .html
-                } else if line.contains("<script") {
-                    currentLang = .js
-                } else if line.contains("</script>") {
-                    currentLang = .html
-                }
+                if line.contains("<style") { currentLang = .css }
+                else if line.contains("</style>") { currentLang = .html }
+                else if line.contains("<script") { currentLang = .js }
+                else if line.contains("</script>") { currentLang = .html }
 
-                let numStr = NSAttributedString(string: String(format: "%3d", absIdx + 1), attributes: [
+                NSAttributedString(string: String(format: "%3d", absIdx + 1), attributes: [
                     .font: codeFont,
                     .foregroundColor: Jarvis.synLineNum
-                ])
-                numStr.draw(at: CGPoint(x: outerPad, y: y))
+                ]).draw(at: CGPoint(x: xCodeLeft, y: y))
 
-                // line-number column divider (very faint cyan)
                 ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
                 ctx.setLineWidth(0.5)
-                ctx.move(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y - 2))
-                ctx.addLine(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y + codeFontSize + 2))
+                ctx.move(to: CGPoint(x: xCodeLeft + lineNumWidth + 2, y: y - 2))
+                ctx.addLine(to: CGPoint(x: xCodeLeft + lineNumWidth + 2, y: y + codeFontSize + 2))
                 ctx.strokePath()
 
                 let tokens = tokenizeWeb(line: line, lang: currentLang)
-                var dx = xCode
+                var dx = xCodeText
                 for (text, kind) in tokens {
-                    let color: UIColor
-                    switch kind {
-                    case .keyword: color = Jarvis.synKeyword
-                    case .function: color = Jarvis.synFunction
-                    case .string: color = Jarvis.synString
-                    case .jsx: color = Jarvis.synJSX
-                    case .normal: color = Jarvis.synNormal
-                    }
+                    let color: UIColor = colorForToken(kind)
                     let attr = NSAttributedString(string: text, attributes: [
                         .font: codeFont,
                         .foregroundColor: color
@@ -992,12 +1058,11 @@ final class PanelManager {
                     attr.draw(at: CGPoint(x: dx, y: y))
                     dx += attr.size().width
                 }
-
                 y += codeFontSize * 1.42
                 if y > codeBottom - codeFontSize { break }
             }
         } else {
-            // Phase 1 demo: hardcoded React snippet
+            // Phase 1 demo snippet.
             let allLines: [String] = [
                 "import React from 'react'",
                 "import { useState } from 'react'",
@@ -1009,41 +1074,28 @@ final class PanelManager {
                 "  return (",
                 "    <div className=\"login\">",
                 "      <h1>Sign in</h1>",
-                "      <input",
-                "        type=\"email\"",
-                "        value={email}",
-                "      />",
+                "      <input type=\"email\" value={email} />",
                 "      <button>Login</button>",
                 "    </div>",
                 "  )",
                 "}"
             ]
-
             for (idx, line) in allLines.enumerated() {
-                let numStr = NSAttributedString(string: String(format: "%2d", idx + 1), attributes: [
+                NSAttributedString(string: String(format: "%2d", idx + 1), attributes: [
                     .font: codeFont,
                     .foregroundColor: Jarvis.synLineNum
-                ])
-                numStr.draw(at: CGPoint(x: outerPad, y: y))
+                ]).draw(at: CGPoint(x: xCodeLeft, y: y))
 
-                // line-number column divider (very faint cyan)
                 ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
                 ctx.setLineWidth(0.5)
-                ctx.move(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y - 2))
-                ctx.addLine(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y + codeFontSize + 2))
+                ctx.move(to: CGPoint(x: xCodeLeft + lineNumWidth + 2, y: y - 2))
+                ctx.addLine(to: CGPoint(x: xCodeLeft + lineNumWidth + 2, y: y + codeFontSize + 2))
                 ctx.strokePath()
 
                 let tokens = tokenize(line: line)
-                var dx = xCode
+                var dx = xCodeText
                 for (text, kind) in tokens {
-                    let color: UIColor
-                    switch kind {
-                    case .keyword: color = Jarvis.synKeyword
-                    case .function: color = Jarvis.synFunction
-                    case .string: color = Jarvis.synString
-                    case .jsx: color = Jarvis.synJSX
-                    case .normal: color = Jarvis.synNormal
-                    }
+                    let color: UIColor = colorForToken(kind)
                     let attr = NSAttributedString(string: text, attributes: [
                         .font: codeFont,
                         .foregroundColor: color
@@ -1051,14 +1103,23 @@ final class PanelManager {
                     attr.draw(at: CGPoint(x: dx, y: y))
                     dx += attr.size().width
                 }
-
                 y += codeFontSize * 1.42
                 if y > codeBottom - codeFontSize { break }
             }
         }
 
-        drawSystemReadout(ctx, size: size, extra: "EDIT")
+        drawSystemReadout(ctx, size: size, extra: "IDE")
         drawCornerBrackets(ctx, size: size)
+    }
+
+    private func colorForToken(_ kind: TokenKind) -> UIColor {
+        switch kind {
+        case .keyword:  return Jarvis.synKeyword
+        case .function: return Jarvis.synFunction
+        case .string:   return Jarvis.synString
+        case .jsx:      return Jarvis.synJSX
+        case .normal:   return Jarvis.synNormal
+        }
     }
 
     private enum TokenKind { case keyword, function, string, jsx, normal }
