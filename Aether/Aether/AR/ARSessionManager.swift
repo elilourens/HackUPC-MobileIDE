@@ -35,6 +35,8 @@ final class ARSessionManager: NSObject, ObservableObject {
     private var workspaceAnchor: AnchorEntity?
     private(set) var panelManager: PanelManager?
     private var placementTransform: simd_float4x4?
+    private var architectureGraph: ArchitectureGraphEntityV2?
+    private var connectionLines: ConnectionLinesEntity?
 
     // MARK: Phase 2 — Live IDE
     /// Shared with PhoneIDEView. Owned at the App level so edits in either mode
@@ -616,6 +618,9 @@ final class ARSessionManager: NSObject, ObservableObject {
         case .showDependencies:
             panelManager?.showDependenciesTree()
             JarvisVoice.shared.speak("Pulling dependencies.")
+        case .showConnections:
+            showConnectionLines()
+            JarvisVoice.shared.speak("Showing cross-file connections.")
         case .showTerry:
             panelManager?.showPanel(.terry)
             JarvisVoice.shared.speak("Bringing up Terry. The legend.")
@@ -629,6 +634,7 @@ final class ARSessionManager: NSObject, ObservableObject {
                 panelManager?.hideErrorMarkers()
                 panelManager?.hideArchitectureGraph()
                 panelManager?.hideDependenciesTree()
+                hideConnectionLines()
             case .preview:      panelManager?.hidePanel(.preview)
             case .docs:         panelManager?.hidePanel(.docs)
             case .terminal:     panelManager?.hidePanel(.terminal)
@@ -638,6 +644,7 @@ final class ARSessionManager: NSObject, ObservableObject {
             case .stats:        panelManager?.hideStatsRing()
             case .architecture: panelManager?.hideArchitectureGraph()
             case .dependencies: panelManager?.hideDependenciesTree()
+            case .connections:  hideConnectionLines()
             }
             JarvisVoice.shared.speak("Done.")
         case .clear:
@@ -647,6 +654,7 @@ final class ARSessionManager: NSObject, ObservableObject {
             panelManager?.hideErrorMarkers()
             panelManager?.hideArchitectureGraph()
             panelManager?.hideDependenciesTree()
+            hideConnectionLines()
             JarvisVoice.shared.speak("Workspace cleared.")
         case .focusMode:
             panelManager?.setFocusMode(true)
@@ -1087,6 +1095,48 @@ extension ARSessionManager {
         }
     }
 
+}
+
+// MARK: - Architecture visualization helpers
+
+extension ARSessionManager {
+    private func showConnectionLines() {
+        guard let workspaceAnchor = workspaceAnchor, let arView = arView else { return }
+
+        // Analyze code connections
+        let connections = CodeAnalyzer.analyzeConnections(projectFiles: session.projectFiles)
+
+        // Remove old entity if exists
+        connectionLines?.removeFromParent()
+
+        // Create new entity
+        let entity = ConnectionLinesEntity()
+
+        // Calculate node positions for the architecture graph
+        let files = Array(session.projectFiles.keys).sorted()
+        let radius: Float = 0.12
+        var positions: [String: SIMD3<Float>] = [:]
+
+        for (index, file) in files.enumerated() {
+            let angle = Float(index) * .pi * 2 / Float(max(1, files.count))
+            let x = cos(angle) * radius
+            let z = sin(angle) * radius
+            positions[file] = SIMD3<Float>(x, 0, z)
+        }
+
+        entity.show(connections: connections, positions: positions)
+        entity.position = SIMD3<Float>(0, 0.85, -0.40)
+        workspaceAnchor.addChild(entity)
+        connectionLines = entity
+
+        session.isShowingConnections = true
+    }
+
+    private func hideConnectionLines() {
+        connectionLines?.removeFromParent()
+        connectionLines = nil
+        session.isShowingConnections = false
+    }
 }
 
 enum SwipeDirection {

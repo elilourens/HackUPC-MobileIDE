@@ -22,6 +22,7 @@
 		F200000000000000000000B0 /* JarvisVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B0 /* JarvisVoice.swift */; };
 		F200000000000000000000B1 /* JarvisAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B1 /* JarvisAssistant.swift */; };
 		F200000000000000000000B2 /* HoloElements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B2 /* HoloElements.swift */; };
+		F200000000000000000000E0 /* CodeAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E0 /* CodeAnalyzer.swift */; };
 		F200000000000000000000C0 /* ProjectSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C0 /* ProjectSession.swift */; };
 		F200000000000000000000C1 /* CodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C1 /* CodeGenerator.swift */; };
 		F200000000000000000000C2 /* PreviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C2 /* PreviewRenderer.swift */; };
@@ -61,6 +62,7 @@
 		F100000000000000000000B0 /* JarvisVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisVoice.swift; sourceTree = "<group>"; };
 		F100000000000000000000B1 /* JarvisAssistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisAssistant.swift; sourceTree = "<group>"; };
 		F100000000000000000000B2 /* HoloElements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoloElements.swift; sourceTree = "<group>"; };
+		F100000000000000000000E0 /* CodeAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeAnalyzer.swift; sourceTree = "<group>"; };
 		F100000000000000000000C0 /* ProjectSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSession.swift; sourceTree = "<group>"; };
 		F100000000000000000000C1 /* CodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeGenerator.swift; sourceTree = "<group>"; };
 		F100000000000000000000C2 /* PreviewRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRenderer.swift; sourceTree = "<group>"; };
@@ -135,6 +137,7 @@
 				F100000000000000000000A5 /* PanelManager.swift */,
 				F100000000000000000000A6 /* PanelEntity.swift */,
 				F100000000000000000000B2 /* HoloElements.swift */,
+				F100000000000000000000E0 /* CodeAnalyzer.swift */,
 			);
 			path = AR;
 			sourceTree = "<group>";
@@ -307,6 +310,7 @@
 				F200000000000000000000B0 /* JarvisVoice.swift in Sources */,
 				F200000000000000000000B1 /* JarvisAssistant.swift in Sources */,
 				F200000000000000000000B2 /* HoloElements.swift in Sources */,
+				F200000000000000000000E0 /* CodeAnalyzer.swift in Sources */,
 				F200000000000000000000C0 /* ProjectSession.swift in Sources */,
 				F200000000000000000000C1 /* CodeGenerator.swift in Sources */,
 				F200000000000000000000C2 /* PreviewRenderer.swift in Sources */,

@@ -551,3 +551,145 @@ extension NSAttributedString {
         draw(at: CGPoint(x: point.x - s.width / 2, y: point.y - s.height / 2))
     }
 }
+
+// MARK: - Architecture graph (from CodeAnalyzer)
+
+final class ArchitectureGraphEntityV2: Entity {
+    private var rotation: Float = 0
+    private let pivot = Entity()
+
+    required override init() {
+        super.init()
+        addChild(pivot)
+    }
+
+    /// Build the architecture graph from project files and connections.
+    func build(projectFiles: [String: String], connections: [Connection]) {
+        // Clear previous children
+        pivot.children.removeAll()
+
+        // Calculate file sizes (line count) for node radius scaling
+        var fileSizes: [String: Int] = [:]
+        for (file, content) in projectFiles {
+            let lineCount = content.split(separator: "\n").count
+            fileSizes[file] = lineCount
+        }
+
+        // Layout nodes in a circle, radius scales by file size
+        let files = Array(projectFiles.keys).sorted()
+        let radius: Float = 0.12
+        var positions: [String: SIMD3<Float>] = [:]
+
+        for (index, file) in files.enumerated() {
+            let angle = Float(index) * .pi * 2 / Float(max(1, files.count))
+            let x = cos(angle) * radius
+            let z = sin(angle) * radius
+            positions[file] = SIMD3<Float>(x, 0, z)
+        }
+
+        // Create nodes
+        for (file, position) in positions {
+            let lineCount = fileSizes[file] ?? 0
+            let nodeRadius = nodeRadiusForLineCount(lineCount)
+            let nodeColor = colorForFile(file)
+
+            let sphere = Holo.sphere(radius: nodeRadius, color: nodeColor)
+            sphere.position = position
+            pivot.addChild(sphere)
+
+            // Add label below node
+            let label = Holo.text(file, fontSize: 0.009, weight: .regular, color: Holo.textWhite)
+            label.position = position + SIMD3<Float>(0, -0.05, 0)
+            pivot.addChild(label)
+        }
+
+        // Create connection lines (imports)
+        for connection in connections {
+            if let fromPos = positions[connection.fromFile],
+               let toPos = positions[connection.toFile] {
+                let line = Holo.line(
+                    from: fromPos,
+                    to: toPos,
+                    thickness: 0.0010,
+                    color: Holo.intelBlueFaint
+                )
+                pivot.addChild(line)
+            }
+        }
+    }
+
+    private func nodeRadiusForLineCount(_ lineCount: Int) -> Float {
+        let minRadius: Float = 0.015
+        let maxRadius: Float = 0.04
+        let normalized = Float(min(lineCount, 1000)) / 1000.0
+        return minRadius + (maxRadius - minRadius) * normalized
+    }
+
+    private func colorForFile(_ filename: String) -> UIColor {
+        let lower = filename.lowercased()
+
+        if lower.hasSuffix(".jsx") || lower.hasSuffix(".tsx") {
+            return Holo.cyan
+        } else if lower.hasSuffix(".css") || lower.hasSuffix(".scss") {
+            return Holo.neonYellow
+        } else if lower.hasSuffix(".json") || lower.hasPrefix("config.") || lower.contains("config.") {
+            return Holo.intelGrey
+        } else if lower.hasSuffix(".ts") || lower.hasSuffix(".js") {
+            return Holo.intelGreen
+        } else if lower.hasPrefix("readme") || lower.hasSuffix(".md") {
+            return Holo.intelGrey
+        }
+
+        return Holo.lightBlue
+    }
+
+    func tick(deltaTime: Float) {
+        rotation += deltaTime * 0.25
+        pivot.transform.rotation = simd_quatf(angle: rotation, axis: SIMD3<Float>(0, 1, 0))
+    }
+}
+
+// MARK: - Connection lines entity
+
+final class ConnectionLinesEntity: Entity {
+    private let linesContainer = Entity()
+
+    required override init() {
+        super.init()
+        addChild(linesContainer)
+    }
+
+    /// Display cross-file connection lines from imports.
+    func show(connections: [Connection], positions: [String: SIMD3<Float>]) {
+        // Clear previous lines
+        linesContainer.children.removeAll()
+
+        for connection in connections {
+            if let fromPos = positions[connection.fromFile],
+               let toPos = positions[connection.toFile] {
+                let line = Holo.line(
+                    from: fromPos,
+                    to: toPos,
+                    thickness: 0.0012,
+                    color: Holo.intelBlue.withAlphaComponent(0.6)
+                )
+                linesContainer.addChild(line)
+
+                // Add source file label at midpoint
+                let midpoint = (fromPos + toPos) / 2
+                let label = Holo.text(
+                    connection.symbol,
+                    fontSize: 0.008,
+                    weight: .regular,
+                    color: Holo.intelText
+                )
+                label.position = midpoint + SIMD3<Float>(0, 0.015, 0)
+                linesContainer.addChild(label)
+            }
+        }
+    }
+
+    func hide() {
+        linesContainer.children.removeAll()
+    }
+}

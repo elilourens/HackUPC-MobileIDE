@@ -145,6 +145,8 @@ final class ProjectSession: ObservableObject {
     @Published var jarvisVoiceEnabled: Bool {
         didSet { UserDefaults.standard.set(jarvisVoiceEnabled, forKey: Self.kJarvisOn) }
     }
+    @Published var isShowingArchitecture: Bool = false
+    @Published var isShowingConnections: Bool = false
 
     private static let kGitHubToken = "aether.github.token"
     private static let kGitHubRepo  = "aether.github.repo"
@@ -153,16 +155,16 @@ final class ProjectSession: ObservableObject {
     /// Bumped whenever `kDefaultBackendURL` changes. On launch, if the saved
     /// version doesn't match the current one, we drop any stale saved
     /// backend URL and re-adopt the new default so existing installs don't
-    /// stay stuck on `http://localhost:8000` after a tunnel switch.
+    /// stay stuck on a previous host (localhost, ngrok) after a switch.
     private static let kBackendURLVersion = "aether.backend.url.version"
-    private static let currentBackendURLVersion = 2
+    private static let currentBackendURLVersion = 3
 
-    /// Public ngrok tunnel that fronts the laptop FastAPI backend so the iOS
-    /// app reaches `/api/plan` + `/api/build` from cellular (not just same
-    /// WiFi). Update this and bump `currentBackendURLVersion` if the tunnel
-    /// domain ever changes — the version-bump forces existing installs to
-    /// drop their stale UserDefaults override and re-adopt the new default.
-    private static let kDefaultBackendURL = "https://founder-cane-compile.ngrok-free.dev"
+    /// Vercel-hosted FastAPI deploy. Permanent URL — no ngrok, no laptop on
+    /// the network. Update this and bump `currentBackendURLVersion` if the
+    /// production hostname ever changes; the version-bump forces existing
+    /// installs to drop their stale UserDefaults override and re-adopt the
+    /// new default.
+    private static let kDefaultBackendURL = "https://backend-sepia-xi-43.vercel.app"
 
     init() {
         let d = UserDefaults.standard

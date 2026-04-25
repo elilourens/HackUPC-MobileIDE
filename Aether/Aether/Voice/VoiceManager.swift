@@ -4,7 +4,7 @@ import AVFoundation
 import Combine
 
 enum VoiceTarget: Equatable {
-    case all, git, errors, stats, preview, docs, terminal, architecture, dependencies, terry
+    case all, git, errors, stats, preview, docs, terminal, architecture, dependencies, connections, terry
 }
 
 enum VoiceCommand: Equatable {
@@ -16,6 +16,7 @@ enum VoiceCommand: Equatable {
     case showTerminal
     case showArchitecture
     case showDependencies
+    case showConnections
     case showTerry
     case hide(VoiceTarget)
     case clear
@@ -171,7 +172,7 @@ final class VoiceManager: ObservableObject {
         "show", "hide", "close", "open", "dismiss", "clear", "bring up", "pull up",
         "preview", "git", "errors", "stats", "performance", "diagnostics",
         "terminal", "console", "docs", "documentation",
-        "architecture", "graph", "dependencies", "packages",
+        "architecture", "graph", "dependencies", "packages", "connections", "imports",
         "terry", "JARVIS",
         "focus mode", "normal mode", "dark mode", "light mode",
         "create a function", "everything"
@@ -332,6 +333,7 @@ final class VoiceManager: ObservableObject {
         (["terminal", "console", "shell"],                          .terminal,      .showTerminal),
         (["architecture", "graph"],                                 .architecture,  .showArchitecture),
         (["dependencies", "dependency", "packages", "deps"],        .dependencies,  .showDependencies),
+        (["connection", "connections", "import", "imports"],        .connections,   .showConnections),
         (["terry"],                                                 .terry,         .showTerry),
     ]
 
