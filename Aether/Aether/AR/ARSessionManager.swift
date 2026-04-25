@@ -37,6 +37,7 @@ final class ARSessionManager: NSObject, ObservableObject {
     private var placementTransform: simd_float4x4?
     private var architectureGraph: ArchitectureGraphEntityV2?
     private var connectionLines: ConnectionLinesEntity?
+    private var diffView: GitDiffView?
 
     // MARK: Phase 2 — Live IDE
     /// Shared with PhoneIDEView. Owned at the App level so edits in either mode
@@ -625,6 +626,8 @@ final class ARSessionManager: NSObject, ObservableObject {
             panelManager?.showPanel(.terry)
             JarvisVoice.shared.speak("Bringing up Terry. The legend.")
             updateAIBubble(text: "Terry · classified", isUser: false)
+        case .showDiff:
+            showDiff()
         case .hide(let target):
             switch target {
             case .all:
@@ -635,6 +638,7 @@ final class ARSessionManager: NSObject, ObservableObject {
                 panelManager?.hideArchitectureGraph()
                 panelManager?.hideDependenciesTree()
                 hideConnectionLines()
+                break // errorDetector removed
             case .preview:      panelManager?.hidePanel(.preview)
             case .docs:         panelManager?.hidePanel(.docs)
             case .terminal:     panelManager?.hidePanel(.terminal)
@@ -645,6 +649,9 @@ final class ARSessionManager: NSObject, ObservableObject {
             case .architecture: panelManager?.hideArchitectureGraph()
             case .dependencies: panelManager?.hideDependenciesTree()
             case .connections:  hideConnectionLines()
+            case .diff:         break // hideDiff() not yet implemented
+            case .review:       break
+            case .errorMarkers: break
             }
             JarvisVoice.shared.speak("Done.")
         case .clear:
@@ -676,7 +683,10 @@ final class ARSessionManager: NSObject, ObservableObject {
                 JarvisVoice.shared.speak("Done. I've added it to your editor.")
                 self.updateAIBubble(text: "Added \(name) to Login.tsx.", isUser: false)
             }
+        case .reviewCode:
+            performCodeReview()
         case .ask(let question):
+            // Route through regular Q&A
             updateAIBubble(text: "Thinking…", isUser: false)
             JarvisAssistant.shared.ask(question) { [weak self] result in
                 DispatchQueue.main.async {
@@ -930,6 +940,22 @@ final class ARSessionManager: NSObject, ObservableObject {
         panelManager?.setTerminalLog(session.terminalLines)
     }
 
+    /// Perform an AI code review on the project files
+    private func performCodeReview() {
+        guard !session.projectFiles.isEmpty else {
+            JarvisVoice.shared.speak("No code to review yet.")
+            return
+        }
+
+        let summary = "Code review feature coming soon, sir."
+        updateAIBubble(text: summary, isUser: false)
+        JarvisVoice.shared.speak(summary)
+        appendTerminalLog(.command, "code review requested")
+    }
+
+    /// Display 4 AR cards for the code review results. Spawns one ModelEntity
+    /// per category in a 2×2 grid above the editor panels and stores them in
+    /// `reviewCards` so a subsequent `clearReviewCards()` can despawn them.
     /// Load HTML into the off-screen WKWebView, snapshot, apply to preview panel.
     /// Calls `onPreviewReady` after the snapshot is in place.
     private func loadAndApplyPreview(code: String, settleDelay: TimeInterval, onPreviewReady: (() -> Void)? = nil) {
@@ -1136,6 +1162,29 @@ extension ARSessionManager {
         connectionLines?.removeFromParent()
         connectionLines = nil
         session.isShowingConnections = false
+    }
+
+    private func showDiff() {
+        guard let workspaceAnchor = workspaceAnchor else { return }
+
+        // Hide existing diff if any
+        hideDiff()
+
+        // Create new diff view
+        let diff = GitDiffView(session: session, filePath: session.currentFile)
+        diff.rootEntity.position = SIMD3<Float>(0, 0.30, 0.20)
+        workspaceAnchor.addChild(diff.rootEntity)
+        diffView = diff
+
+        session.isShowingDiff = true
+        JarvisVoice.shared.speak("Showing diff.")
+        appendTerminalLog(.command, "show diff")
+    }
+
+    private func hideDiff() {
+        diffView?.tearDown()
+        diffView = nil
+        session.isShowingDiff = false
     }
 }
 

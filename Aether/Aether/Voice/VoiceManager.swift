@@ -4,7 +4,7 @@ import AVFoundation
 import Combine
 
 enum VoiceTarget: Equatable {
-    case all, git, errors, stats, preview, docs, terminal, architecture, dependencies, connections, terry
+    case all, git, errors, stats, preview, docs, terminal, architecture, dependencies, connections, terry, review, errorMarkers, diff
 }
 
 enum VoiceCommand: Equatable {
@@ -25,6 +25,7 @@ enum VoiceCommand: Equatable {
     case darkMode
     case lightMode
     case createFunction(name: String)
+    case reviewCode
     case ask(String)
 
     // Phase 2 — live IDE
@@ -50,6 +51,8 @@ enum VoiceCommand: Equatable {
     case undo
     /// Create an empty file in the project tree.
     case newFile(String)
+    /// Show the git diff view in AR.
+    case showDiff
     /// Re-render the preview from current code.
     case runPreview
     /// Save (demo no-op — JARVIS just acknowledges).
@@ -325,7 +328,8 @@ final class VoiceManager: ObservableObject {
 
     /// Each entry: keywords that imply this target → which target/show-command to fire.
     private static let targetMap: [(keywords: Set<String>, target: VoiceTarget, show: VoiceCommand)] = [
-        (["git", "commit", "commits", "history"],                   .git,           .showGit),
+        (["git", "commit", "commits", "history", "diff"],           .git,           .showGit),
+        (["diff", "difference"],                                     .diff,          .showDiff),
         (["error", "errors", "issue", "issues", "bug", "bugs", "problem", "problems"], .errors, .showErrors),
         (["stat", "stats", "performance", "diagnostic", "diagnostics"], .stats,     .showStats),
         (["preview", "browser"],                                    .preview,       .showPreview),
@@ -484,6 +488,16 @@ final class VoiceManager: ObservableObject {
         // CREATE FUNCTION (very loose detection)
         if let name = extractFunctionName(from: lower) {
             return .createFunction(name: name)
+        }
+
+        // REVIEW CODE
+        if lower.contains("review this") || lower.contains("review code") || lower.contains("review my code") {
+            return .reviewCode
+        }
+
+        // CLEAR ERRORS
+        if lower.contains("clear errors") || lower.contains("hide errors") || lower.contains("hide error markers") {
+            return .hide(.errorMarkers)
         }
 
         // ----- Token-based show/hide -----

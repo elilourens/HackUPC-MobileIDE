@@ -147,6 +147,8 @@ final class ProjectSession: ObservableObject {
     }
     @Published var isShowingArchitecture: Bool = false
     @Published var isShowingConnections: Bool = false
+    @Published var isShowingReview: Bool = false
+    @Published var isShowingDiff: Bool = false
 
     private static let kGitHubToken = "aether.github.token"
     private static let kGitHubRepo  = "aether.github.repo"

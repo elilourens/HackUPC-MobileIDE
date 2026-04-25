@@ -295,6 +295,30 @@ final class BackendClient {
         """
     }
 
+    // MARK: - Project analysis
+
+    /// POST every project file + a free-form question to `/api/analyze` and
+    /// return the model's plain-text answer. Used by AR voice queries
+    /// ("what does Login do?") and AI code review (4-card grid).
+    func analyze(files: [String: String],
+                 question: String,
+                 baseURL: String,
+                 completion: @escaping (Result<String, Error>) -> Void) {
+        let body: [String: Any] = ["files": files, "question": question]
+        callBackendJSON(path: "/api/analyze", body: body, baseURL: baseURL) { result in
+            switch result {
+            case .success(let json):
+                if let text = (json["response"] as? String), !text.isEmpty {
+                    completion(.success(text))
+                } else {
+                    completion(.failure(BackendError.decoding))
+                }
+            case .failure(let err):
+                completion(.failure(err))
+            }
+        }
+    }
+
     // MARK: - Code-edit sync (mongo)
 
     /// Fire-and-forget POST `/code-edits` so a teammate can replay the live
