@@ -574,7 +574,7 @@ final class VoiceManager: ObservableObject {
     }
 
     /// Phase 2 catch-all. Any utterance with at least 3 letters that didn't match a
-    /// known command is treated as a Gemini codegen / modify request. Below 3 letters
+    /// known command is treated as an OpenAI codegen / modify request. Below 3 letters
     /// is almost always a misfire ("uh", "ok", "no") and we drop it.
     ///
     /// Gated by the wake-phrase rule: returns nil unless the user either opened

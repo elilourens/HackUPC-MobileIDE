@@ -670,7 +670,7 @@ final class ARSessionManager: NSObject, ObservableObject {
             }
         case .ask(let question):
             updateAIBubble(text: "Thinking…", isUser: false)
-            GeminiClient.shared.ask(question) { [weak self] result in
+            JarvisAssistant.shared.ask(question) { [weak self] result in
                 DispatchQueue.main.async {
                     guard let self else { return }
                     switch result {

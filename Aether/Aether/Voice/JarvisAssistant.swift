@@ -1,38 +1,40 @@
 import Foundation
 
-/// Gemini text-generation client for free-form questions ("how do I center a div").
-final class GeminiClient {
-    static let shared = GeminiClient()
+/// JARVIS Q&A assistant — answers free-form questions ("how do I center a
+/// div") in 1–2 lines. Backed by OpenAI Chat Completions (gpt-4o-mini for
+/// speed) so the whole app routes through a single API key — no Gemini.
+final class JarvisAssistant {
+    static let shared = JarvisAssistant()
 
-    private let apiKey = Secrets.geminiKey
+    private let apiKey = Secrets.openAIKey
+    private let model = "gpt-4o-mini"
 
     private init() {}
 
-    /// System guidance — JARVIS is concise and efficient.
+    /// JARVIS persona — concise, technical, slightly dry. Mirrors the prior
+    /// system prompt so AR and the agent panel keep their voice.
     private let systemPreamble = """
     You are JARVIS, Tony Stark's AI assistant, helping a developer in their AR coding workspace.
     Answer in 1-2 short sentences. Be direct, technical, and slightly dry. Never apologize.
     """
 
     func ask(_ question: String, completion: @escaping (Result<String, Error>) -> Void) {
-        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(apiKey)") else {
+        guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
             completion(.failure(URLError(.badURL))); return
         }
 
         var req = URLRequest(url: url, timeoutInterval: 15)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
         let body: [String: Any] = [
-            "system_instruction": [
-                "parts": [["text": systemPreamble]]
-            ],
-            "contents": [
-                ["parts": [["text": question]], "role": "user"]
-            ],
-            "generationConfig": [
-                "temperature": 0.6,
-                "maxOutputTokens": 120
+            "model": model,
+            "temperature": 0.6,
+            "max_tokens": 160,
+            "messages": [
+                ["role": "system", "content": systemPreamble],
+                ["role": "user",   "content": question]
             ]
         ]
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -46,15 +48,15 @@ final class GeminiClient {
             }
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
                 let body = String(data: data, encoding: .utf8) ?? "<no body>"
-                print("Gemini HTTP \(http.statusCode): \(body)")
+                print("JarvisAssistant HTTP \(http.statusCode): \(body)")
                 completion(.failure(URLError(.badServerResponse))); return
             }
             do {
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                let candidates = json?["candidates"] as? [[String: Any]]
-                let content = candidates?.first?["content"] as? [String: Any]
-                let parts = content?["parts"] as? [[String: Any]]
-                let text = (parts?.first?["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let choices = json?["choices"] as? [[String: Any]]
+                let message = choices?.first?["message"] as? [String: Any]
+                let text = (message?["content"] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
                 if let text = text, !text.isEmpty {
                     completion(.success(text))
                 } else {

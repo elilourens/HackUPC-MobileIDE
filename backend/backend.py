@@ -32,6 +32,7 @@ from ghost.schemas import (
     TtsTestRequest,
 )
 from speech.transcribe import transcribe_audio
+import templates as template_registry
 
 load_dotenv()
 
@@ -80,6 +81,40 @@ DESIGN RULES:
 - NO generic placeholder text. Write real compelling copy.
 
 Return ONLY raw HTML. No markdown. No backticks. No explanation. No comments."""
+
+ROUTER_MODEL = os.getenv("ROUTER_MODEL", "gpt-4o")
+
+
+def _make_template_router_prompt():
+    """Build the router system prompt dynamically from the registry."""
+    template_list = template_registry.list_for_router()
+    template_docs = "\n\n".join(
+        f"Template: {t['id']}\n"
+        f"Description: {t['description']}\n"
+        f"Spec slots: {t['spec']}"
+        for t in template_list
+    )
+    return f"""You are a template selector for a website builder. The user has described a website they want to build.
+
+Your job: pick the best matching template from our registry, OR say "none" if no template is appropriate.
+
+Available templates:
+
+{template_docs}
+
+Respond with ONLY a JSON object, no other text:
+- If a template matches (≥70% confidence): {{"template_id": "template_name", "spec": {{...spec object...}}}}
+- If no template matches: {{"template_id": "none"}}
+
+When you pick a template:
+1. Set spec slots to sensible defaults based on the user's description
+2. Use real product/company names from the request, or provide plausible examples
+3. For images, use Unsplash keywords in SPEC_SCHEMA_HINT fields (model will fill them)
+4. Ensure every required slot in the spec is set (fallback to good defaults if not provided)
+
+Example: User says "I need a landing page for my SaaS product called LineFlow".
+Response: {{"template_id": "saas_landing", "spec": {{"product_name": "LineFlow", "tagline": "Ship faster, scale smarter", ...}}}}"""
+
 
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
 
@@ -1009,11 +1044,68 @@ def api_plan(payload: PlanRequest) -> PlanResponse:
     )
 
 
+def _build_via_template(prompt: str) -> Optional[dict]:
+    """Try to route the prompt to a template. Returns a BuildResponse-ready dict
+    (files, primary, preview_html, stack) or None if no template fits.
+    """
+    try:
+        client = _require_openai()
+        router_prompt = _make_template_router_prompt()
+        response = client.chat.completions.create(
+            model=ROUTER_MODEL,
+            messages=[
+                {"role": "system", "content": router_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+        )
+        raw = response.choices[0].message.content or "{}"
+        route_result = json.loads(raw)
+    except (json.JSONDecodeError, Exception):
+        return None
+
+    template_id = route_result.get("template_id", "none")
+    if template_id == "none":
+        return None
+
+    # Look up template module
+    tmpl = template_registry.get(template_id)
+    if not tmpl:
+        return None
+
+    # Extract spec
+    spec = route_result.get("spec") or {}
+    if not isinstance(spec, dict):
+        spec = {}
+
+    # Render the template
+    try:
+        files = tmpl.render(spec)
+    except Exception:
+        return None
+
+    if not files or not isinstance(files, dict):
+        return None
+
+    return {
+        "files": files,
+        "primary": "src/App.jsx",
+        "stack": "react-vite",
+    }
+
+
 @app.post("/api/build", response_model=BuildResponse)
 def api_build(payload: BuildRequest) -> BuildResponse:
     if not payload.prompt.strip():
         raise HTTPException(400, "prompt cannot be empty")
 
+    # Try template router first — it's fast and produces beautiful, consistent output
+    template_result = _build_via_template(payload.prompt)
+    if template_result:
+        data = template_result
+        return _build_response_from_project(data)
+
+    # Fall back to freeform LLM codegen if no template matched
     data = _generate_project(
         [
             {"role": "system", "content": PROJECT_BUILD_SYSTEM_PROMPT},

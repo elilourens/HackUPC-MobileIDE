@@ -13,7 +13,7 @@ final class PreviewRenderer: NSObject, WKNavigationDelegate {
     /// `document.elementFromPoint` coordinate space.
     ///
     /// Sized for a 16:9 landscape preview panel (matches the AR panel's inner-rect
-    /// aspect ~1.73). At this width Gemini's "polished product" pages render with
+    /// aspect ~1.73). At this width OpenAI's "polished product" pages render with
     /// desktop-style layouts rather than a cramped mobile column, which removes the
     /// horizontal stretch we'd otherwise see when blitting a portrait snapshot into
     /// a landscape panel.

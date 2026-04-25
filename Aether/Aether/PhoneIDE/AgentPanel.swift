@@ -250,10 +250,10 @@ struct AgentPanel: View {
         }
     }
 
-    /// Ask mode = quick Q&A, no code generation. Routes through GeminiClient.
+    /// Ask mode = quick Q&A, no code generation. Routes through JarvisAssistant.
     private func sendAskMode(prompt: String) {
         let placeholderId = session.appendChat(.assistant, "thinking…")
-        GeminiClient.shared.ask(prompt) { result in
+        JarvisAssistant.shared.ask(prompt) { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let answer):
@@ -266,7 +266,7 @@ struct AgentPanel: View {
         }
     }
 
-    /// Review mode = critique current code. Uses GeminiClient with the file as
+    /// Review mode = critique current code. Uses JarvisAssistant with the file as
     /// context — returns plain markdown, never HTML, so we don't accidentally
     /// rewrite the editor.
     private func sendReviewMode(prompt: String) {
@@ -289,7 +289,7 @@ struct AgentPanel: View {
         --- code ---
         \(clip)
         """
-        GeminiClient.shared.ask(q) { result in
+        JarvisAssistant.shared.ask(q) { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let critique):

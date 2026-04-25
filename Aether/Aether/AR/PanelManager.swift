@@ -1950,7 +1950,7 @@ final class PanelManager {
     }
 
     // MARK: Terminal
-    /// Gemini CLI surface — 4-point sparkle, model badge, prompt arrows. Cyan
+    /// Junie CLI surface — 4-point sparkle, model badge, prompt arrows. Cyan
     /// accents are gone; everything is now IntelliJ blue (#4A88C7) on the
     /// IntelliJ Islands dark terminal background.
     private func drawTerminal(in ctx: CGContext, size: CGSize) {
@@ -1988,7 +1988,7 @@ final class PanelManager {
             ctx.draw(junie, in: junieRect)
             ctx.restoreGState()
         } else {
-            drawGeminiSparkle(ctx, center: sparkleCenter, radius: sparkleR, color: JB.junieGreen)
+            drawJunieSparkle(ctx, center: sparkleCenter, radius: sparkleR, color: JB.junieGreen)
         }
 
         let titleX = sparkleCenter.x + sparkleR + 14
@@ -2090,9 +2090,10 @@ final class PanelManager {
                                    y: size.height - pad - badgeFontSize - 6))
     }
 
-    /// 4-point sparkle (the Gemini logo signature). 8 vertices alternating outer
-    /// and inner radius gives a plump cross/star.
-    private func drawGeminiSparkle(_ ctx: CGContext, center: CGPoint, radius: CGFloat, color: UIColor) {
+    /// 4-point sparkle (Junie's signature glyph, originally lifted from the
+    /// Gemini logo). 8 vertices alternating outer and inner radius gives a
+    /// plump cross/star.
+    private func drawJunieSparkle(_ ctx: CGContext, center: CGPoint, radius: CGFloat, color: UIColor) {
         let path = CGMutablePath()
         let outerR = radius
         let innerR = radius * 0.34
@@ -2150,11 +2151,11 @@ final class PanelManager {
             ctx.fill(CGRect(x: 1, y: 6, width: 3, height: size.height - 12))
         }
 
-        // Sparkle icon on the left (JetBrains 4-point star — same shape as the
-        // Gemini sparkle, just colored neutral).
+        // Sparkle icon on the left (JetBrains 4-point star — Junie's signature
+        // glyph, just colored neutral here).
         let iconR: CGFloat = size.height * 0.22
         let iconCenter = CGPoint(x: size.height * 0.55, y: size.height / 2)
-        drawGeminiSparkle(ctx, center: iconCenter, radius: iconR, color: JB.textActive)
+        drawJunieSparkle(ctx, center: iconCenter, radius: iconR, color: JB.textActive)
 
         // Main message text in the IntelliJ neutral grey — no "AETHER" label,
         // no streaming badge, no chrome.
