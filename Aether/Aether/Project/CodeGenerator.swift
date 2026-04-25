@@ -13,28 +13,39 @@ final class CodeGenerator {
 
     private init() {}
 
-    /// Big aesthetic-direction system prompt for fresh page generation. Tells
-    /// GPT-4o to commit to a bold visual identity rather than generic AI slop.
+    /// React-via-CDN + Tailwind-via-CDN system prompt. No build step — everything
+    /// runs straight in the WKWebView preview.
     private let generateSystem = """
-    You are AETHER, an AI coding assistant inside an AR IDE. Generate a complete, self-contained single HTML file with all CSS in a <style> tag and all JS in a <script> tag. Return ONLY raw HTML. No markdown. No backticks. No explanation. No comments.
+    You are a world-class frontend developer. Generate a single HTML file that uses React 18 via CDN and Tailwind CSS via CDN.
 
-    Design rules:
-    - Create distinctive, production-grade frontend interfaces that avoid generic AI slop aesthetics.
-    - Choose a BOLD aesthetic direction for each page: brutally minimal, maximalist, retro-futuristic, organic, luxury, editorial, brutalist, art deco, soft/pastel, industrial. Pick one and commit.
-    - Typography: Choose fonts that are beautiful and unique. NEVER use Inter, Roboto, Arial, or system fonts. Use Google Fonts. Pick distinctive display fonts paired with refined body fonts. Import them via <link> in the <head>.
-    - Color: Commit to a cohesive palette. Dominant colors with sharp accents. NO GRADIENTS. No purple gradients on white. Use solid colors, high contrast, intentional color blocking.
-    - Layout: Unexpected layouts. Asymmetry. Generous negative space OR controlled density. Grid-breaking elements. Not cookie-cutter.
-    - Details: Subtle shadows, rounded corners where appropriate, micro-interactions via CSS transitions, hover states that surprise. Textures, patterns, decorative borders if they fit the aesthetic.
-    - Dark theme by default unless the request implies otherwise.
-    - Make it look like a real product designed by a top design agency, not a tutorial demo.
-    - Every page should feel UNFORGETTABLE. What is the one thing someone will remember about this design?
+    The HTML file must include these script tags in <head>:
+    <script src='https://unpkg.com/react@18/umd/react.production.min.js'></script>
+    <script src='https://unpkg.com/react-dom@18/umd/react-dom.production.min.js'></script>
+    <script src='https://unpkg.com/@babel/standalone/babel.min.js'></script>
+    <script src='https://cdn.tailwindcss.com'></script>
+
+    Write React components inside a <script type='text/babel'> tag. Use Tailwind classes for all styling. Render into a div with id='root'.
+
+    DESIGN RULES:
+    - Use Google Fonts via <link> in head. Good fonts: DM Sans, Plus Jakarta Sans, Sora, Outfit, Manrope. Pick one.
+    - Color: 2-3 colors max. Muted, professional, modern. Good dark palette: bg-neutral-950, cards bg-neutral-900, accent blue-500 or orange-500, text neutral-50
+    - NO neon colors. NO hot pink. NO gradients. NO rainbow.
+    - Layout: max-w-5xl mx-auto, good padding (p-8, p-12)
+    - Components: rounded-2xl, shadow-sm, clean borders
+    - Typography: text-4xl font-bold for headings, text-base for body, good line-height (leading-relaxed)
+    - Spacing: generous. gap-6, space-y-8, py-20 for sections
+    - Make it look like a Vercel or Linear marketing page
+    - Use real Unsplash images where appropriate: https://images.unsplash.com/photo-ID?w=800
+    - Dark theme by default
+
+    Return ONLY the raw HTML. No markdown. No backticks. No explanation.
     """
 
     /// Modification system prompt — preserves the existing aesthetic but applies
     /// the user's change. Less prescriptive than the generation prompt because
     /// the page already has a visual identity we don't want to overwrite.
     private let modifySystemPreamble = """
-    You are AETHER. The user has an existing HTML page and wants a targeted change. Preserve the existing aesthetic, fonts, color palette, and layout direction. Apply the requested change cleanly. Return the COMPLETE modified HTML file. Return ONLY raw HTML. No markdown. No backticks. No explanation.
+    You are a world-class frontend developer. The user has an existing HTML page that uses React 18 + Tailwind CSS via CDN, with React components inside a <script type='text/babel'> tag rendered into div#root. Preserve that structure, the existing fonts, color palette, and overall layout direction. Apply the requested change cleanly. Return the COMPLETE modified HTML file. Return ONLY raw HTML. No markdown. No backticks. No explanation.
     """
 
     /// Generate a brand-new HTML page from a natural-language prompt.
