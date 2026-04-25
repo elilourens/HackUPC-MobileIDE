@@ -1749,21 +1749,21 @@ final class PanelManager {
         let errorRed     = JB.accentRed
         let outputDim    = JB.textInactive
 
-        // ---- Header row: sparkle + GEMINI + model badge -------------------
+        // ---- Header row: sparkle + JUNIE + model badge --------------------
         var y: CGFloat = pad + 6
         let sparkleR: CGFloat = headerFontSize * 0.46
         let sparkleCenter = CGPoint(x: pad + 18 + sparkleR, y: y + sparkleR + 2)
         drawGeminiSparkle(ctx, center: sparkleCenter, radius: sparkleR, color: JB.accentBlue)
 
         let titleX = sparkleCenter.x + sparkleR + 14
-        NSAttributedString(string: "GEMINI", attributes: [
+        NSAttributedString(string: "JUNIE", attributes: [
             .font: headerFont,
             .foregroundColor: JB.textActive,
             .kern: 4.0
         ]).draw(at: CGPoint(x: titleX, y: y))
 
-        // Model badge (right-aligned).
-        let modelBadge = NSAttributedString(string: "gemini-2.0-flash", attributes: [
+        // Model badge (right-aligned). Branded as Junie — JetBrains' AI assistant.
+        let modelBadge = NSAttributedString(string: "junie · 2025.3", attributes: [
             .font: badgeFont,
             .foregroundColor: JB.textInactive,
             .kern: 1.2
@@ -1816,7 +1816,7 @@ final class PanelManager {
             }
         } else {
             let banner: [(String, UIColor)] = [
-                ("✦ welcome to gemini-cli", infoColor),
+                ("✦ welcome to junie", infoColor),
                 ("  type a prompt or hold the mic to speak", outputDim),
                 ("> ", promptColor),
             ]
