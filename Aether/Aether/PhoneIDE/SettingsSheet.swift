@@ -7,6 +7,10 @@ struct SettingsSheet: View {
 
     @State private var backendDraft: String = ""
     @State private var saved = false
+    @State private var testStatus: TestStatus = .idle
+    @State private var testMessage: String = ""
+
+    enum TestStatus { case idle, testing, ok, fail }
 
     var body: some View {
         NavigationView {
@@ -20,6 +24,36 @@ struct SettingsSheet: View {
                             .textInputAutocapitalization(.never)
                             .foregroundColor(IJ.textPrimary)
                             .listRowBackground(IJ.bgEditor)
+                        HStack {
+                            Button(action: testConnection) {
+                                HStack(spacing: 6) {
+                                    if testStatus == .testing {
+                                        ProgressView().scaleEffect(0.7)
+                                    }
+                                    Text(testStatus == .testing ? "Testing…" : "Test connection")
+                                        .font(.system(size: 13, weight: .medium))
+                                }
+                            }
+                            .disabled(testStatus == .testing)
+                            Spacer()
+                            switch testStatus {
+                            case .ok:
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(IJ.accentGreen)
+                            case .fail:
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(IJ.accentRed)
+                            default:
+                                EmptyView()
+                            }
+                        }
+                        .listRowBackground(IJ.bgEditor)
+                        if !testMessage.isEmpty {
+                            Text(testMessage)
+                                .font(.system(size: 11))
+                                .foregroundColor(testStatus == .fail ? IJ.accentRed : IJ.textSecondary)
+                                .listRowBackground(IJ.bgMain)
+                        }
                         Text("Falls back to OpenAI gpt-4o on-device if the backend is unreachable.")
                             .font(.system(size: 11))
                             .foregroundColor(IJ.textSecondary)
@@ -67,6 +101,37 @@ struct SettingsSheet: View {
         }
         .preferredColorScheme(.dark)
         .onAppear { backendDraft = session.backendURL }
+    }
+
+    private func testConnection() {
+        let raw = backendDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !raw.isEmpty, let url = URL(string: raw + "/health") else {
+            testStatus = .fail; testMessage = "Bad URL"; return
+        }
+        testStatus = .testing
+        testMessage = ""
+        var req = URLRequest(url: url, timeoutInterval: 6)
+        req.httpMethod = "GET"
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    testStatus = .fail
+                    testMessage = "Unreachable: \(error.localizedDescription)"
+                    return
+                }
+                if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                    testStatus = .ok
+                    testMessage = "Healthy. Backend will be used for /api/build."
+                } else if let http = response as? HTTPURLResponse {
+                    testStatus = .fail
+                    testMessage = "HTTP \(http.statusCode) — falling back to on-device gpt-4o."
+                } else {
+                    testStatus = .fail
+                    testMessage = "Unexpected response."
+                }
+            }
+        }.resume()
     }
 }
 

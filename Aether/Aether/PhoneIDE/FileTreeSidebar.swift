@@ -140,9 +140,13 @@ struct FileTreeSidebar: View {
         session.projectFiles.keys.sorted()
     }
 
+    @State private var renameTarget: String? = nil
+    @State private var renameDraft: String = ""
+
     @ViewBuilder
     private func localRow(_ file: String) -> some View {
         let active = file == session.currentFile
+        let modified = session.modifiedFiles.contains(file)
         Button(action: {
             onSelectFile(file)
             isShown = false
@@ -151,17 +155,48 @@ struct FileTreeSidebar: View {
                 Rectangle()
                     .fill(active ? IJ.accentBlue : Color.clear)
                     .frame(width: 2)
-                Circle().fill(IJ.iconColor(for: file)).frame(width: 7, height: 7)
+                Image(JBIconLoader.fileTypeAsset(for: file))
+                    .resizable().renderingMode(.original).aspectRatio(contentMode: .fit)
+                    .frame(width: 12, height: 12)
                 Text(file)
                     .font(.system(size: 13))
-                    .foregroundColor(IJ.textPrimary)
+                    .foregroundColor(modified ? IJ.accentBlue : IJ.textPrimary)
                 Spacer()
+                if modified {
+                    Circle().fill(IJ.accentBlue).frame(width: 6, height: 6)
+                }
             }
             .padding(.vertical, 8)
             .padding(.trailing, 12)
             .background(active ? IJ.bgSelected : Color.clear)
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Open") { onSelectFile(file); isShown = false }
+            Button("Rename…") {
+                renameDraft = file
+                renameTarget = file
+            }
+            Button("Copy Path") { UIPasteboard.general.string = file }
+            Divider()
+            Button("Delete", role: .destructive) { session.deleteFile(file) }
+        }
+        .alert("Rename file", isPresented: Binding(
+            get: { renameTarget != nil },
+            set: { if !$0 { renameTarget = nil } }
+        )) {
+            TextField("filename", text: $renameDraft)
+            Button("Rename") {
+                if let from = renameTarget {
+                    let to = renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !to.isEmpty && to != from {
+                        session.renameFile(from: from, to: to)
+                    }
+                }
+                renameTarget = nil
+            }
+            Button("Cancel", role: .cancel) { renameTarget = nil }
+        }
     }
 
     @ViewBuilder

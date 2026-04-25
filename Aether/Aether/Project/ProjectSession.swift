@@ -197,6 +197,36 @@ final class ProjectSession: ObservableObject {
         ensureTabOpen(file)
     }
 
+    /// Rename a project file. No-op if `from` doesn't exist or `to` already does.
+    func renameFile(from: String, to: String) {
+        guard let code = projectFiles[from], projectFiles[to] == nil else { return }
+        projectFiles.removeValue(forKey: from)
+        projectFiles[to] = code
+        if let idx = openTabs.firstIndex(of: from) { openTabs[idx] = to }
+        if currentFile == from { currentFile = to }
+        if modifiedFiles.contains(from) {
+            modifiedFiles.remove(from)
+            modifiedFiles.insert(to)
+        }
+        if let sha = gitHubFileShas[from] {
+            gitHubFileShas.removeValue(forKey: from)
+            gitHubFileShas[to] = sha
+        }
+    }
+
+    /// Delete a project file and clean up tabs / shas / modified-set.
+    func deleteFile(_ name: String) {
+        projectFiles.removeValue(forKey: name)
+        modifiedFiles.remove(name)
+        gitHubFileShas.removeValue(forKey: name)
+        if let idx = openTabs.firstIndex(of: name) {
+            openTabs.remove(at: idx)
+        }
+        if currentFile == name {
+            currentFile = openTabs.last ?? (projectFiles.keys.sorted().first ?? "index.html")
+        }
+    }
+
     /// Close an editor tab. If it was the active tab, switch to the previous one.
     func closeTab(_ file: String) {
         guard let idx = openTabs.firstIndex(of: file) else { return }

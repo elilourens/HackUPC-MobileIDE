@@ -211,12 +211,22 @@ struct AgentPanel: View {
     private func send() {
         let prompt = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
-        guard session.pendingPlan == nil else { return }   // ignore typing while a plan is awaiting confirm
+        guard session.pendingPlan == nil else { return }
         draft = ""
         inputFocused = false
         if sttActive { sttRecognizer.stop { _ in }; sttActive = false }
 
         session.appendChat(.user, prompt)
+
+        switch junieMode {
+        case .code:   sendCodeMode(prompt: prompt)
+        case .ask:    sendAskMode(prompt: prompt)
+        case .review: sendReviewMode(prompt: prompt)
+        }
+    }
+
+    /// Code mode = the existing plan→confirm→build pipeline.
+    private func sendCodeMode(prompt: String) {
         let placeholderId = session.appendChat(.assistant, "planning…")
         session.isPlanning = true
         let isModification = session.hasUserCode
@@ -235,6 +245,58 @@ struct AgentPanel: View {
                     session.pendingPlanIsModification = false
                     session.replaceMessage(id: placeholderId,
                                            with: "Planning failed: \(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// Ask mode = quick Q&A, no code generation. Routes through GeminiClient.
+    private func sendAskMode(prompt: String) {
+        let placeholderId = session.appendChat(.assistant, "thinking…")
+        GeminiClient.shared.ask(prompt) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let answer):
+                    session.replaceMessage(id: placeholderId, with: answer)
+                case .failure(let err):
+                    session.replaceMessage(id: placeholderId,
+                                           with: "Couldn't reach Junie: \(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// Review mode = critique current code. Uses GeminiClient with the file as
+    /// context — returns plain markdown, never HTML, so we don't accidentally
+    /// rewrite the editor.
+    private func sendReviewMode(prompt: String) {
+        let placeholderId = session.appendChat(.assistant, "reviewing \(session.currentFile)…")
+        let code = session.currentCode
+        guard !code.isEmpty else {
+            session.replaceMessage(id: placeholderId,
+                                   with: "Nothing to review yet — generate code first.")
+            return
+        }
+        let clip = code.count > 6000 ? String(code.prefix(6000)) + "\n... [truncated]" : code
+        let q = """
+        Review the following \(session.currentFile) and the user's note. \
+        Be concise — bullet the top 3 issues + one quick win. \
+        Plain text. No code blocks unless absolutely necessary. \
+        Never return raw HTML.
+
+        User note: \(prompt)
+
+        --- code ---
+        \(clip)
+        """
+        GeminiClient.shared.ask(q) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let critique):
+                    session.replaceMessage(id: placeholderId, with: critique)
+                case .failure(let err):
+                    session.replaceMessage(id: placeholderId,
+                                           with: "Review failed: \(err.localizedDescription)")
                 }
             }
         }

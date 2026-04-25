@@ -93,9 +93,152 @@ struct WelcomeScreen: View {
         switch section {
         case .projects:   projectsContent
         case .customize:  placeholder("Customize")
-        case .plugins:    placeholder("Plugins · Marketplace")
+        case .plugins:    pluginsContent
         case .learn:      placeholder("Learn ArcReact")
         }
+    }
+
+    // MARK: - Plugins (mock JetBrains Marketplace)
+
+    private struct Plugin {
+        let name: String
+        let vendor: String
+        let summary: String
+        let installs: String
+        let rating: String
+        let stickerColor: Color
+        let initials: String
+    }
+
+    private let mockPlugins: [Plugin] = [
+        Plugin(name: "Junie", vendor: "JetBrains s.r.o.",
+               summary: "AI coding agent. Plans, edits, and reviews — voice-first.",
+               installs: "1.2M",  rating: "★ 4.8",
+               stickerColor: Color(red: 95/255, green: 184/255, blue: 101/255),
+               initials: "J"),
+        Plugin(name: "GitHub Copilot", vendor: "GitHub, Inc.",
+               summary: "Autocomplete and chat for hundreds of languages.",
+               installs: "8.4M",  rating: "★ 4.4",
+               stickerColor: Color(white: 0.18), initials: "GH"),
+        Plugin(name: "Tailwind CSS",   vendor: "Adam Wathan",
+               summary: "Class-name suggestions, hover previews, and color swatches.",
+               installs: "920K",  rating: "★ 4.7",
+               stickerColor: Color(red:  56/255, green: 189/255, blue: 248/255),
+               initials: "TW"),
+        Plugin(name: "Prettier",       vendor: "James Long",
+               summary: "Opinionated code formatter for JS, TS, CSS, JSON, and more.",
+               installs: "5.6M",  rating: "★ 4.6",
+               stickerColor: Color(red: 233/255, green:  70/255, blue: 138/255),
+               initials: "PR"),
+        Plugin(name: ".env files",     vendor: "Plumbing Co.",
+               summary: "Syntax highlighting + secret masking for dotenv files.",
+               installs: "210K",  rating: "★ 4.5",
+               stickerColor: Color(red: 234/255, green: 168/255, blue:  85/255),
+               initials: "EN"),
+        Plugin(name: "Code With Me",   vendor: "JetBrains s.r.o.",
+               summary: "Pair-program live with anyone — even people without an IDE.",
+               installs: "640K",  rating: "★ 4.3",
+               stickerColor: Color(red: 124/255, green:  92/255, blue: 255/255),
+               initials: "CWM"),
+    ]
+
+    private var pluginsContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Marketplace")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(IJ.textPrimary)
+                Spacer()
+                HStack(spacing: 6) {
+                    JBIcon(.tool("search"), size: 12)
+                    Text("Search plugins")
+                        .font(.system(size: 12)).foregroundColor(IJ.textDisabled)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 6).fill(IJ.bgInput))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(IJ.border, lineWidth: 1))
+                .frame(maxWidth: 220)
+            }
+            .padding(.horizontal, 28).padding(.top, 28)
+
+            // Tabs row — Marketplace / Installed / Updates
+            HStack(spacing: 18) {
+                ForEach(["Marketplace", "Installed", "Updates"], id: \.self) { t in
+                    let active = t == "Marketplace"
+                    Text(t)
+                        .font(.system(size: 12, weight: active ? .semibold : .regular))
+                        .foregroundColor(active ? IJ.textPrimary : IJ.textSecondary)
+                        .overlay(
+                            Rectangle()
+                                .fill(active ? IJ.accentBlue : Color.clear)
+                                .frame(height: 2)
+                                .offset(y: 12),
+                            alignment: .bottom
+                        )
+                        .padding(.bottom, 6)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 28).padding(.top, 14)
+            .overlay(Rectangle().fill(IJ.border).frame(height: 1), alignment: .bottom)
+
+            // Plugin grid
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 320), spacing: 14)],
+                          alignment: .leading, spacing: 14) {
+                    ForEach(mockPlugins, id: \.name) { p in
+                        pluginCard(p)
+                    }
+                }
+                .padding(28)
+            }
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func pluginCard(_ p: Plugin) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6).fill(p.stickerColor)
+                    Text(p.initials)
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(.white)
+                }
+                .frame(width: 36, height: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(IJ.textPrimary)
+                    Text(p.vendor)
+                        .font(.system(size: 11))
+                        .foregroundColor(IJ.textSecondary)
+                }
+                Spacer()
+                Button(action: {}) {
+                    Text("Install")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(IJ.accentBlue))
+                }
+            }
+            Text(p.summary)
+                .font(.system(size: 12))
+                .foregroundColor(IJ.textSecondary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Text(p.rating).font(.system(size: 11)).foregroundColor(IJ.accentOrange)
+                Text("\(p.installs) installs")
+                    .font(.system(size: 11)).foregroundColor(IJ.textDisabled)
+                Spacer()
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 8).fill(IJ.bgEditor))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(IJ.border, lineWidth: 1))
     }
 
     private var projectsContent: some View {

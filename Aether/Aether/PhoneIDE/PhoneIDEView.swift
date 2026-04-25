@@ -14,6 +14,10 @@ struct PhoneIDEView: View {
     @State private var showGitHubConnect = false
     @State private var showPreview = false
     @State private var showJunie = true       // right slide-in Junie tool window
+    @State private var showNewFilePrompt = false
+    @State private var newFileDraft: String = ""
+    @State private var currentBranch: String = "main"
+    @State private var showNotifications = false
     @State private var editorRatio: CGFloat = 0.62   // editor takes ~62% by default when preview is split
     @State private var dragStartRatio: CGFloat = 0.62
 
@@ -109,15 +113,24 @@ struct PhoneIDEView: View {
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(RoundedRectangle(cornerRadius: 6).fill(IJ.bgEditor))
 
-            // Branch widget
-            HStack(spacing: 4) {
-                JBIcon(.tool("branch"), size: 11)
-                Text("main")
-                    .font(.system(size: 11))
-                    .foregroundColor(IJ.textPrimary)
+            // Branch widget — dropdown of stub branches
+            Menu {
+                ForEach(["main", "develop", "feature/junie-rework", "hotfix/voice-bug"], id: \.self) { b in
+                    Button(b) { currentBranch = b }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    JBIcon(.tool("branch"), size: 11)
+                    Text(currentBranch)
+                        .font(.system(size: 11))
+                        .foregroundColor(IJ.textPrimary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .semibold))
+                        .foregroundColor(IJ.textSecondary)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 6).fill(IJ.bgEditor))
             }
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(RoundedRectangle(cornerRadius: 6).fill(IJ.bgEditor))
 
             // Run + debug widgets
             Button(action: { /* run preview */ withAnimation(.easeOut(duration: 0.18)) { showPreview = true } }) {
@@ -128,6 +141,19 @@ struct PhoneIDEView: View {
                 JBIcon(.tool("debug"), size: 13)
                     .frame(width: 22, height: 22)
             }
+
+            // GitHub sync — tap = push, long-press = pull (JetBrains UX)
+            Button(action: pushToGitHub) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(session.isGitHubConnected ? IJ.textPrimary : IJ.textDisabled)
+                    .frame(width: 22, height: 22)
+            }
+            .disabled(!session.isGitHubConnected)
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.5)
+                    .onEnded { _ in pullFromGitHub() }
+            )
 
             Spacer()
 
@@ -144,6 +170,31 @@ struct PhoneIDEView: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 16, height: 16)
             }
+            // Notifications bell — JetBrains New UI right-side notification center
+            Menu {
+                Section("Notifications") {
+                    Button { } label: {
+                        Label("Junie suggested 3 changes", systemImage: "sparkles")
+                    }
+                    Button { } label: {
+                        Label("Updates available · ArcReact 2026.1.1", systemImage: "arrow.down.circle")
+                    }
+                    Button { } label: {
+                        Label("Welcome to ArcReact", systemImage: "sparkle")
+                    }
+                }
+            } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "bell")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(IJ.textPrimary)
+                        .frame(width: 22, height: 22)
+                    Circle().fill(IJ.accentRed)
+                        .frame(width: 6, height: 6)
+                        .offset(x: -2, y: 2)
+                }
+            }
+
             // Avatar
             ZStack {
                 Circle().fill(IJ.bgEditor)
@@ -257,22 +308,52 @@ struct PhoneIDEView: View {
     // MARK: - Tabs
 
     private var tabs: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(session.openTabs, id: \.self) { file in
-                    tabRow(file)
-                }
-                if session.openTabs.isEmpty {
-                    Text("no files")
-                        .font(.system(size: 12))
-                        .foregroundColor(IJ.textDisabled)
-                        .padding(.horizontal, 14)
+        HStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(session.openTabs, id: \.self) { file in
+                        tabRow(file)
+                    }
+                    if session.openTabs.isEmpty {
+                        Text("no files")
+                            .font(.system(size: 12))
+                            .foregroundColor(IJ.textDisabled)
+                            .padding(.horizontal, 14)
+                    }
                 }
             }
+            // Trailing "+" — JetBrains-style new-file affordance at the end of
+            // the tab strip. Tapping prompts for a name then opens the new file.
+            Button(action: { showNewFilePrompt = true }) {
+                Image("JB-tool-add")
+                    .resizable().renderingMode(.original).aspectRatio(contentMode: .fit)
+                    .frame(width: 11, height: 11)
+                    .frame(width: 26, height: tabsHeight)
+            }
+            .buttonStyle(.plain)
         }
         .frame(height: tabsHeight)
         .background(IJ.bgTabs)
         .overlay(Rectangle().fill(IJ.border).frame(height: 1), alignment: .bottom)
+        .alert("New file", isPresented: $showNewFilePrompt) {
+            TextField("filename.html", text: $newFileDraft)
+            Button("Create", action: confirmNewFile)
+            Button("Cancel", role: .cancel) { newFileDraft = "" }
+        } message: {
+            Text("Name the new file (e.g. styles.css, app.js).")
+        }
+    }
+
+    private func confirmNewFile() {
+        var name = newFileDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        newFileDraft = ""
+        if name.isEmpty {
+            newFile()
+            return
+        }
+        if !name.contains(".") { name += ".html" }
+        session.createFile(name)
+        session.switchTo(file: name)
     }
 
     @ViewBuilder
@@ -314,6 +395,22 @@ struct PhoneIDEView: View {
             )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Close") { session.closeTab(file) }
+            Button("Close Others") {
+                for f in session.openTabs where f != file { session.closeTab(f) }
+            }
+            Button("Close All") {
+                for f in session.openTabs { session.closeTab(f) }
+            }
+            Divider()
+            Button("Reveal in Project") {
+                withAnimation(.easeOut(duration: 0.22)) { sidebarShown = true }
+            }
+            Button("Copy Path") {
+                UIPasteboard.general.string = file
+            }
+        }
     }
 
     // MARK: - Split (editor / agent OR editor / preview)
@@ -507,14 +604,13 @@ struct PhoneIDEView: View {
         }
     }
 
-    private func pushOrPull() {
-        // Single button does push for now. Pull lives behind a long-press.
+    private func pushToGitHub() {
         guard session.isGitHubConnected, !session.currentCode.isEmpty else { return }
         let path = session.currentFile
         let sha = session.gitHubFileShas[path]
         statusMessage = "pushing…"
         GitHubClient.shared.putFile(path: path, text: session.currentCode, sha: sha,
-                                    message: "Updated via Aether",
+                                    message: "Updated via ArcReact",
                                     session: session) { result in
             switch result {
             case .success(let newSha):
@@ -526,6 +622,27 @@ struct PhoneIDEView: View {
             case .failure(let err):
                 self.statusMessage = "push failed"
                 self.session.appendChat(.assistant, "Push failed: \(err.localizedDescription)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.statusMessage = "" }
+            }
+        }
+    }
+
+    private func pullFromGitHub() {
+        guard session.isGitHubConnected else { return }
+        let path = session.currentFile
+        statusMessage = "pulling…"
+        GitHubClient.shared.getFile(path: path, session: session) { result in
+            switch result {
+            case .success(let payload):
+                self.session.gitHubFileShas[path] = payload.sha
+                self.session.setCode(payload.text, forFile: path, pushHistory: false)
+                self.session.markFileSynced(path)
+                self.statusMessage = "pulled"
+                self.session.appendChat(.assistant, "Pulled \(path) from GitHub.")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { self.statusMessage = "" }
+            case .failure(let err):
+                self.statusMessage = "pull failed"
+                self.session.appendChat(.assistant, "Pull failed: \(err.localizedDescription)")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.statusMessage = "" }
             }
         }
