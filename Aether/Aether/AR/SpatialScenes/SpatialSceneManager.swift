@@ -48,11 +48,10 @@ final class SpatialSceneManager {
             buildFocusMode(animated: animated)
             return
         case .cambridge, .canaryWharf, .pretoriaGardens:
-            if !attemptEXRLoad(for: scene) {
-                print("[SpatialScene] EXR unavailable, using procedural fallback for \(scene.displayName)")
-            }
+            arView.environment.lighting.resource = nil
+            arView.environment.background = .color(scene.backgroundColor)
             setupAnchor()
-            buildProcedural(for: scene, animated: animated)
+            loadSkyboxEnvironment(for: scene, animated: animated)
         }
     }
 
@@ -82,70 +81,80 @@ final class SpatialSceneManager {
         sceneAnchor = nil
     }
 
-    private func attemptEXRLoad(for scene: SpatialScene) -> Bool {
-        guard let assetName = scene.assetName else { return false }
-        print("[SpatialScene] asset load attempted: \(assetName)")
-        guard let url = Bundle.main.url(forResource: assetName, withExtension: nil, subdirectory: "EnvironmentMaps")
-            ?? Bundle.main.url(forResource: assetName, withExtension: nil) else {
-            print("[SpatialScene] asset load failure: file not found in bundle")
-            return false
-        }
-        if #available(iOS 16.0, *) {
-            do {
-                _ = try TextureResource.load(contentsOf: url)
-                print("[SpatialScene] asset load success: \(assetName)")
-                return true
-            } catch {
-                print("[SpatialScene] asset load failure: \(error.localizedDescription)")
+    /// Loads compiled `.skybox` environment maps (see Apple `EnvironmentResource` docs). Work is off the main thread to reduce hitches.
+    private func loadSkyboxEnvironment(for scene: SpatialScene, animated: Bool) {
+        guard let baseName = scene.environmentImageBaseName else { return }
+
+        print("[SpatialScene] EnvironmentResource load started: \(baseName)")
+
+        Task.detached { [baseName, scene] in
+            let loaded = Result { try EnvironmentResource.load(named: baseName, in: Bundle.main) }
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                guard self.currentScene == scene else { return }
+                guard let arView = self.arView else { return }
+
+                switch loaded {
+                case .success(let env):
+                    arView.environment.background = .skybox(env)
+                    arView.environment.lighting.resource = env
+                    print("[SpatialScene] EnvironmentResource loaded: \(baseName)")
+                case .failure(let error):
+                    print("[SpatialScene] EnvironmentResource load failed (\(baseName)): \(error.localizedDescription)")
+                    arView.environment.background = .color(scene.backgroundColor)
+                    arView.environment.lighting.resource = nil
+                    self.buildProcedural(for: scene, animated: animated)
+                }
             }
-        } else {
-            print("[SpatialScene] asset load failure: iOS version too old for TextureResource.load")
         }
-        return false
     }
 
     private func buildProcedural(for scene: SpatialScene, animated: Bool) {
         guard let anchor = sceneAnchor else { return }
-        let radius: Float = 2.4
-        let shell = ModelEntity(mesh: .generateSphere(radius: radius), materials: [UnlitMaterial(color: .black)])
-        shell.scale = SIMD3<Float>(-1, 1, 1)
-        shell.position = SIMD3<Float>(0, 0.3, 0)
 
         let tintA: UIColor
         let tintB: UIColor
         switch scene {
         case .cambridge:
-            tintA = UIColor(red: 0.47, green: 0.39, blue: 0.28, alpha: 0.32)
-            tintB = UIColor(red: 0.38, green: 0.52, blue: 0.37, alpha: 0.18)
+            tintA = UIColor(red: 0.68, green: 0.58, blue: 0.43, alpha: 0.55)
+            tintB = UIColor(red: 0.54, green: 0.66, blue: 0.48, alpha: 0.38)
         case .canaryWharf:
-            tintA = UIColor(red: 0.08, green: 0.13, blue: 0.23, alpha: 0.45)
-            tintB = UIColor(red: 0.18, green: 0.30, blue: 0.55, alpha: 0.24)
+            tintA = UIColor(red: 0.10, green: 0.19, blue: 0.42, alpha: 0.62)
+            tintB = UIColor(red: 0.22, green: 0.42, blue: 0.74, alpha: 0.42)
         case .pretoriaGardens:
-            tintA = UIColor(red: 0.18, green: 0.42, blue: 0.24, alpha: 0.32)
-            tintB = UIColor(red: 0.64, green: 0.78, blue: 0.38, alpha: 0.20)
+            tintA = UIColor(red: 0.24, green: 0.56, blue: 0.30, alpha: 0.58)
+            tintB = UIColor(red: 0.72, green: 0.86, blue: 0.45, alpha: 0.38)
         case .realWorld, .focusDark:
             tintA = .clear
             tintB = .clear
         }
 
         let layerA = ModelEntity(
-            mesh: .generatePlane(width: 5.0, depth: 5.0),
+            mesh: .generatePlane(width: 6.0, depth: 3.0),
             materials: [UnlitMaterial(color: tintA)]
         )
-        layerA.position = SIMD3<Float>(0, 0.35, -0.2)
+        layerA.position = SIMD3<Float>(0, 1.0, -1.8)
         layerA.transform.rotation = simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0))
 
         let layerB = ModelEntity(
-            mesh: .generatePlane(width: 5.0, depth: 5.0),
+            mesh: .generatePlane(width: 6.6, depth: 2.8),
             materials: [UnlitMaterial(color: tintB)]
         )
-        layerB.position = SIMD3<Float>(0, 1.2, -0.5)
+        layerB.position = SIMD3<Float>(0, 1.3, -2.6)
         layerB.transform.rotation = simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0))
 
-        anchor.addChild(shell)
+        let floorTint = ModelEntity(
+            mesh: .generatePlane(width: 3.8, depth: 3.8),
+            materials: [UnlitMaterial(color: tintA.withAlphaComponent(0.16))]
+        )
+        floorTint.position = SIMD3<Float>(0, -0.02, 0)
+        floorTint.transform.rotation = simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0))
+
         anchor.addChild(layerA)
         anchor.addChild(layerB)
-        sceneEntities.append(contentsOf: [shell, layerA, layerB])
+        anchor.addChild(floorTint)
+        sceneEntities.append(contentsOf: [layerA, layerB, floorTint])
 
         if scene == .canaryWharf {
             for i in 0..<8 {
@@ -180,8 +189,8 @@ final class SpatialSceneManager {
     private func buildFocusMode(animated: Bool) {
         guard let anchor = sceneAnchor else { return }
         let shell = ModelEntity(
-            mesh: .generateSphere(radius: 1.8),
-            materials: [UnlitMaterial(color: UIColor(white: 0.03, alpha: 0.65))]
+            mesh: .generateSphere(radius: 2.8),
+            materials: [UnlitMaterial(color: UIColor(white: 0.02, alpha: 0.48))]
         )
         shell.scale = SIMD3<Float>(-1, 1, 1)
         shell.position = SIMD3<Float>(0, 0.3, 0)
@@ -201,6 +210,23 @@ final class SpatialSceneManager {
                 duration: 0.28,
                 timingFunction: .easeInOut
             )
+        }
+    }
+}
+
+private extension SpatialScene {
+    var backgroundColor: UIColor {
+        switch self {
+        case .realWorld:
+            return .black
+        case .cambridge:
+            return UIColor(red: 0.20, green: 0.18, blue: 0.16, alpha: 1)
+        case .canaryWharf:
+            return UIColor(red: 0.03, green: 0.07, blue: 0.15, alpha: 1)
+        case .pretoriaGardens:
+            return UIColor(red: 0.08, green: 0.16, blue: 0.08, alpha: 1)
+        case .focusDark:
+            return UIColor(white: 0.03, alpha: 1)
         }
     }
 }

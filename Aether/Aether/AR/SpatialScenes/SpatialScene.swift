@@ -30,6 +30,13 @@ enum SpatialScene: String, CaseIterable, Codable {
         }
     }
 
+    /// Name passed to `EnvironmentResource.load(named:)` — the equirectangular file inside a `.skybox` folder, without extension.
+    var environmentImageBaseName: String? {
+        guard let name = assetName else { return nil }
+        guard let dot = name.lastIndex(of: ".") else { return name }
+        return String(name[..<dot])
+    }
+
     var accentColor: Color {
         switch self {
         case .realWorld: return .white

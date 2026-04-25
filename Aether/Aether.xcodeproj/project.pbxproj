@@ -44,9 +44,9 @@
 		F200000000000000000000DF /* SpatialScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DF /* SpatialScene.swift */; };
 		F200000000000000000000E0 /* SpatialSceneManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E0 /* SpatialSceneManager.swift */; };
 		F200000000000000000000E1 /* SpatialScenePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E1 /* SpatialScenePicker.swift */; };
-		F200000000000000000000E2 /* cambridge_4k.exr in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E2 /* cambridge_4k.exr */; };
-		F200000000000000000000E3 /* canary_wharf_4k.exr in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E3 /* canary_wharf_4k.exr */; };
-		F200000000000000000000E4 /* pretoria_gardens_4k.exr in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E4 /* pretoria_gardens_4k.exr */; };
+		F200000000000000000000E5 /* Cambridge.skybox in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000EB /* Cambridge.skybox */; };
+		F200000000000000000000E6 /* CanaryWharf.skybox in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000EC /* CanaryWharf.skybox */; };
+		F200000000000000000000E7 /* PretoriaGardens.skybox in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000ED /* PretoriaGardens.skybox */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -89,9 +89,9 @@
 		F100000000000000000000DF /* SpatialScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialScene.swift; sourceTree = "<group>"; };
 		F100000000000000000000E0 /* SpatialSceneManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialSceneManager.swift; sourceTree = "<group>"; };
 		F100000000000000000000E1 /* SpatialScenePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialScenePicker.swift; sourceTree = "<group>"; };
-		F100000000000000000000E2 /* cambridge_4k.exr */ = {isa = PBXFileReference; lastKnownFileType = file; path = cambridge_4k.exr; sourceTree = "<group>"; };
-		F100000000000000000000E3 /* canary_wharf_4k.exr */ = {isa = PBXFileReference; lastKnownFileType = file; path = canary_wharf_4k.exr; sourceTree = "<group>"; };
-		F100000000000000000000E4 /* pretoria_gardens_4k.exr */ = {isa = PBXFileReference; lastKnownFileType = file; path = pretoria_gardens_4k.exr; sourceTree = "<group>"; };
+		F100000000000000000000EB /* Cambridge.skybox */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Cambridge.skybox; sourceTree = "<group>"; };
+		F100000000000000000000EC /* CanaryWharf.skybox */ = {isa = PBXFileReference; lastKnownFileType = folder; path = CanaryWharf.skybox; sourceTree = "<group>"; };
+		F100000000000000000000ED /* PretoriaGardens.skybox */ = {isa = PBXFileReference; lastKnownFileType = folder; path = PretoriaGardens.skybox; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,16 +153,6 @@
 			path = AR;
 			sourceTree = "<group>";
 		};
-		F300000000000000000000DF /* SpatialScenes */ = {
-			isa = PBXGroup;
-			children = (
-				F100000000000000000000DF /* SpatialScene.swift */,
-				F100000000000000000000E0 /* SpatialSceneManager.swift */,
-				F100000000000000000000E1 /* SpatialScenePicker.swift */,
-			);
-			path = SpatialScenes;
-			sourceTree = "<group>";
-		};
 		F300000000000000000000A4 /* Gestures */ = {
 			isa = PBXGroup;
 			children = (
@@ -201,16 +191,6 @@
 				F300000000000000000000E0 /* EnvironmentMaps */,
 			);
 			path = Resources;
-			sourceTree = "<group>";
-		};
-		F300000000000000000000E0 /* EnvironmentMaps */ = {
-			isa = PBXGroup;
-			children = (
-				F100000000000000000000E2 /* cambridge_4k.exr */,
-				F100000000000000000000E3 /* canary_wharf_4k.exr */,
-				F100000000000000000000E4 /* pretoria_gardens_4k.exr */,
-			);
-			path = EnvironmentMaps;
 			sourceTree = "<group>";
 		};
 		F300000000000000000000A8 /* Products */ = {
@@ -255,6 +235,26 @@
 				F100000000000000000000D7 /* GitHubClient.swift */,
 			);
 			path = Backend;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000DF /* SpatialScenes */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000DF /* SpatialScene.swift */,
+				F100000000000000000000E0 /* SpatialSceneManager.swift */,
+				F100000000000000000000E1 /* SpatialScenePicker.swift */,
+			);
+			path = SpatialScenes;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000E0 /* EnvironmentMaps */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000EB /* Cambridge.skybox */,
+				F100000000000000000000EC /* CanaryWharf.skybox */,
+				F100000000000000000000ED /* PretoriaGardens.skybox */,
+			);
+			path = EnvironmentMaps;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -317,9 +317,9 @@
 			files = (
 				F200000000000000000000AC /* Assets.xcassets in Resources */,
 				F200000000000000000000DB /* JBIcons in Resources */,
-				F200000000000000000000E2 /* cambridge_4k.exr in Resources */,
-				F200000000000000000000E3 /* canary_wharf_4k.exr in Resources */,
-				F200000000000000000000E4 /* pretoria_gardens_4k.exr in Resources */,
+				F200000000000000000000E5 /* Cambridge.skybox in Resources */,
+				F200000000000000000000E6 /* CanaryWharf.skybox in Resources */,
+				F200000000000000000000E7 /* PretoriaGardens.skybox in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -512,7 +512,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.aether.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aether.app1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -542,7 +542,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.aether.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aether.app1;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
