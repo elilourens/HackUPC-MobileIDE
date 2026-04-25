@@ -40,6 +40,7 @@ struct ContentView: View {
                     .ignoresSafeArea()
             case .phoneIDE:
                 PhoneIDEView(session: session, onEnterAR: enterAR)
+                    .ignoresSafeArea()
                     .transition(.opacity)
             case .placement:
                 PlacementView(sessionManager: sessionManager) {

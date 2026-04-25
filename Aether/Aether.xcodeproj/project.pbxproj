@@ -40,6 +40,7 @@
 		F200000000000000000000DB /* JBIcons in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DB /* JBIcons */; };
 		F200000000000000000000DC /* JBIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DC /* JBIcon.swift */; };
 		F200000000000000000000DD /* WelcomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DD /* WelcomeScreen.swift */; };
+		F200000000000000000000DE /* DevicePerformanceProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DE /* DevicePerformanceProfile.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,6 +79,7 @@
 		F100000000000000000000DB /* JBIcons */ = {isa = PBXFileReference; lastKnownFileType = folder; path = JBIcons; sourceTree = "<group>"; };
 		F100000000000000000000DC /* JBIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JBIcon.swift; sourceTree = "<group>"; };
 		F100000000000000000000DD /* WelcomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeScreen.swift; sourceTree = "<group>"; };
+		F100000000000000000000DE /* DevicePerformanceProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicePerformanceProfile.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -132,6 +134,7 @@
 				F100000000000000000000A4 /* ARSessionManager.swift */,
 				F100000000000000000000A5 /* PanelManager.swift */,
 				F100000000000000000000A6 /* PanelEntity.swift */,
+				F100000000000000000000DE /* DevicePerformanceProfile.swift */,
 				F100000000000000000000B2 /* HoloElements.swift */,
 			);
 			path = AR;
@@ -321,6 +324,7 @@
 				F200000000000000000000DA /* PlanHUDOverlay.swift in Sources */,
 				F200000000000000000000DC /* JBIcon.swift in Sources */,
 				F200000000000000000000DD /* WelcomeScreen.swift in Sources */,
+				F200000000000000000000DE /* DevicePerformanceProfile.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -472,7 +476,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -502,7 +506,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};

@@ -35,6 +35,9 @@ final class ARSessionManager: NSObject, ObservableObject {
     private var workspaceAnchor: AnchorEntity?
     private(set) var panelManager: PanelManager?
     private var placementTransform: simd_float4x4?
+    private let performanceProfile = DevicePerformanceProfile.current
+    nonisolated(unsafe) private var lastHandProcessTime: TimeInterval = 0
+    nonisolated(unsafe) private var lastPlacementTickTime: TimeInterval = 0
 
     // MARK: Phase 2 — Live IDE
     /// Shared with PhoneIDEView. Owned at the App level so edits in either mode
@@ -103,13 +106,17 @@ final class ARSessionManager: NSObject, ObservableObject {
         self.arView = arView
         let config = ARWorldTrackingConfiguration()
         config.planeDetection = [.horizontal]
-        config.environmentTexturing = .automatic
+        config.environmentTexturing = performanceProfile.enableEnvironmentTexturing ? .automatic : .none
         config.isLightEstimationEnabled = true
-        if type(of: config).supportsFrameSemantics(.personSegmentationWithDepth) {
+        if performanceProfile.enablePeopleOcclusion,
+           type(of: config).supportsFrameSemantics(.personSegmentationWithDepth) {
             config.frameSemantics.insert(.personSegmentationWithDepth)
         }
         arView.session.delegate = self
         arView.session.run(config, options: [.removeExistingAnchors, .resetTracking])
+        if performanceProfile.isConstrained {
+            print("[Perf] A12X profile enabled: 30fps, reduced AR features, throttled hand tracking")
+        }
 
         installPlacementIndicator()
     }
@@ -933,14 +940,21 @@ extension ARSessionManager: ARSessionDelegate {
         // Instead: hand the buffer DIRECTLY to HandTracker's bg queue (which has its own
         // inFlight guard that drops new buffers if one is still being processed). Only the
         // lightweight, buffer-free placement tick hops to MainActor.
-        let pixelBuffer = frame.capturedImage
-        handTracker.process(pixelBuffer: pixelBuffer, orientation: .right) { [weak self] result in
-            Task { @MainActor [weak self] in
-                self?.applyHandResult(result)
+        let now = CFAbsoluteTimeGetCurrent()
+        if now - lastHandProcessTime >= performanceProfile.handTrackingInterval {
+            lastHandProcessTime = now
+            let pixelBuffer = frame.capturedImage
+            handTracker.process(pixelBuffer: pixelBuffer, orientation: .right) { [weak self] result in
+                Task { @MainActor [weak self] in
+                    self?.applyHandResult(result)
+                }
             }
         }
-        Task { @MainActor [weak self] in
-            self?.tickPlacement()
+        if now - lastPlacementTickTime >= performanceProfile.placementTickInterval {
+            lastPlacementTickTime = now
+            Task { @MainActor [weak self] in
+                self?.tickPlacement()
+            }
         }
     }
 

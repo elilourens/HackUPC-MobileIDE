@@ -56,7 +56,7 @@ struct PhoneIDEView: View {
                 }
                 .ignoresSafeArea(edges: .bottom)
 
-                junieRightPanel(height: geo.size.height)
+                junieRightPanel(width: geo.size.width, height: geo.size.height)
                     .animation(.easeOut(duration: 0.22), value: showJunie)
                     .ignoresSafeArea(edges: .vertical)
 
@@ -466,8 +466,8 @@ struct PhoneIDEView: View {
 
     // MARK: - Right slide-in Junie tool window
 
-    private func junieRightPanel(height: CGFloat) -> some View {
-        let totalWidth = UIScreen.main.bounds.width
+    private func junieRightPanel(width: CGFloat, height: CGFloat) -> some View {
+        let totalWidth = width
         // Phone-sized: panel takes ~62% of the screen — leaves a strip of editor
         // visible behind it like WebStorm's split tool windows.
         let panelWidth = max(280, totalWidth * 0.62)
@@ -492,6 +492,7 @@ struct PhoneIDEView: View {
                 .transition(.move(edge: .trailing))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
     }
 
     // MARK: - Status bar

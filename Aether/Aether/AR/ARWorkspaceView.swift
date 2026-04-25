@@ -7,10 +7,14 @@ struct ARWorkspaceView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
+        let profile = DevicePerformanceProfile.current
         arView.environment.background = .cameraFeed()
         arView.renderOptions = [.disableMotionBlur, .disableDepthOfField, .disableHDR]
         arView.environment.lighting.intensityExponent = 1.2
         arView.debugOptions = []
+        // ARView does not expose `preferredFramesPerSecond` like ARSCNView.
+        // Keep performance tuning in ARSessionManager (feature/processing throttles).
+        _ = profile.preferredFPS
 
         sessionManager.attach(arView: arView)
 

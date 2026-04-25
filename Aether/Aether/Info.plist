@@ -22,15 +22,21 @@
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>UILaunchScreen</key>
-	<dict>
-		<key>UIColorName</key>
-		<string></string>
-	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>ArcReact uses the camera for AR workspace and hand tracking</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ArcReact uses the microphone for voice commands</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>ArcReact uses speech recognition for voice coding</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
+	</dict>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string></string>
 	</dict>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
@@ -39,20 +45,21 @@
 	</array>
 	<key>UIRequiresFullScreen</key>
 	<true/>
+	<key>UIStatusBarHidden</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-	<key>UIStatusBarHidden</key>
-	<true/>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-	<key>NSCameraUsageDescription</key>
-	<string>ArcReact uses the camera for AR workspace and hand tracking</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>ArcReact uses the microphone for voice commands</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>ArcReact uses speech recognition for voice coding</string>
 	<key>arkit</key>
 	<true/>
 </dict>
