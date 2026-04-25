@@ -1,0 +1,437 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		F200000000000000000000A1 /* AetherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A1 /* AetherApp.swift */; };
+		F200000000000000000000A2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A2 /* ContentView.swift */; };
+		F200000000000000000000A3 /* ARWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A3 /* ARWorkspaceView.swift */; };
+		F200000000000000000000A4 /* ARSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A4 /* ARSessionManager.swift */; };
+		F200000000000000000000A5 /* PanelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A5 /* PanelManager.swift */; };
+		F200000000000000000000A6 /* PanelEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A6 /* PanelEntity.swift */; };
+		F200000000000000000000A7 /* HandTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A7 /* HandTracker.swift */; };
+		F200000000000000000000A8 /* GestureInterpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A8 /* GestureInterpreter.swift */; };
+		F200000000000000000000A9 /* VoiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A9 /* VoiceManager.swift */; };
+		F200000000000000000000AA /* PlacementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000AA /* PlacementView.swift */; };
+		F200000000000000000000AB /* WorkspaceHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000AB /* WorkspaceHUD.swift */; };
+		F200000000000000000000AC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000AC /* Assets.xcassets */; };
+		F200000000000000000000B0 /* JarvisVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B0 /* JarvisVoice.swift */; };
+		F200000000000000000000B1 /* GeminiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B1 /* GeminiClient.swift */; };
+		F200000000000000000000B2 /* HoloElements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B2 /* HoloElements.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		F100000000000000000000A1 /* AetherApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AetherApp.swift; sourceTree = "<group>"; };
+		F100000000000000000000A2 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		F100000000000000000000A3 /* ARWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARWorkspaceView.swift; sourceTree = "<group>"; };
+		F100000000000000000000A4 /* ARSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARSessionManager.swift; sourceTree = "<group>"; };
+		F100000000000000000000A5 /* PanelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelManager.swift; sourceTree = "<group>"; };
+		F100000000000000000000A6 /* PanelEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelEntity.swift; sourceTree = "<group>"; };
+		F100000000000000000000A7 /* HandTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandTracker.swift; sourceTree = "<group>"; };
+		F100000000000000000000A8 /* GestureInterpreter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureInterpreter.swift; sourceTree = "<group>"; };
+		F100000000000000000000A9 /* VoiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceManager.swift; sourceTree = "<group>"; };
+		F100000000000000000000AA /* PlacementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacementView.swift; sourceTree = "<group>"; };
+		F100000000000000000000AB /* WorkspaceHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHUD.swift; sourceTree = "<group>"; };
+		F100000000000000000000AC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F100000000000000000000AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F100000000000000000000AE /* Aether.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aether.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F100000000000000000000B0 /* JarvisVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisVoice.swift; sourceTree = "<group>"; };
+		F100000000000000000000B1 /* GeminiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiClient.swift; sourceTree = "<group>"; };
+		F100000000000000000000B2 /* HoloElements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoloElements.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F400000000000000000000A2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		F300000000000000000000A0 = {
+			isa = PBXGroup;
+			children = (
+				F300000000000000000000A1 /* Aether */,
+				F300000000000000000000A8 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F300000000000000000000A1 /* Aether */ = {
+			isa = PBXGroup;
+			children = (
+				F300000000000000000000A2 /* App */,
+				F300000000000000000000A3 /* AR */,
+				F300000000000000000000A4 /* Gestures */,
+				F300000000000000000000A5 /* Voice */,
+				F300000000000000000000A6 /* Views */,
+				F300000000000000000000A7 /* Resources */,
+				F100000000000000000000AD /* Info.plist */,
+			);
+			path = Aether;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000A2 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000A1 /* AetherApp.swift */,
+				F100000000000000000000A2 /* ContentView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000A3 /* AR */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000A3 /* ARWorkspaceView.swift */,
+				F100000000000000000000A4 /* ARSessionManager.swift */,
+				F100000000000000000000A5 /* PanelManager.swift */,
+				F100000000000000000000A6 /* PanelEntity.swift */,
+				F100000000000000000000B2 /* HoloElements.swift */,
+			);
+			path = AR;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000A4 /* Gestures */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000A7 /* HandTracker.swift */,
+				F100000000000000000000A8 /* GestureInterpreter.swift */,
+			);
+			path = Gestures;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000A5 /* Voice */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000A9 /* VoiceManager.swift */,
+				F100000000000000000000B0 /* JarvisVoice.swift */,
+				F100000000000000000000B1 /* GeminiClient.swift */,
+			);
+			path = Voice;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000A6 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000AA /* PlacementView.swift */,
+				F100000000000000000000AB /* WorkspaceHUD.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000A7 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000AC /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000A8 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000AE /* Aether.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F500000000000000000000A1 /* Aether */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F800000000000000000000A2 /* Build configuration list for PBXNativeTarget "Aether" */;
+			buildPhases = (
+				F400000000000000000000A1 /* Sources */,
+				F400000000000000000000A2 /* Frameworks */,
+				F400000000000000000000A3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Aether;
+			productName = Aether;
+			productReference = F100000000000000000000AE /* Aether.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F600000000000000000000A1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					F500000000000000000000A1 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = F800000000000000000000A1 /* Build configuration list for PBXProject "Aether" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = F300000000000000000000A0;
+			productRefGroup = F300000000000000000000A8 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F500000000000000000000A1 /* Aether */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F400000000000000000000A3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F200000000000000000000AC /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F400000000000000000000A1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F200000000000000000000A1 /* AetherApp.swift in Sources */,
+				F200000000000000000000A2 /* ContentView.swift in Sources */,
+				F200000000000000000000A3 /* ARWorkspaceView.swift in Sources */,
+				F200000000000000000000A4 /* ARSessionManager.swift in Sources */,
+				F200000000000000000000A5 /* PanelManager.swift in Sources */,
+				F200000000000000000000A6 /* PanelEntity.swift in Sources */,
+				F200000000000000000000A7 /* HandTracker.swift in Sources */,
+				F200000000000000000000A8 /* GestureInterpreter.swift in Sources */,
+				F200000000000000000000A9 /* VoiceManager.swift in Sources */,
+				F200000000000000000000AA /* PlacementView.swift in Sources */,
+				F200000000000000000000AB /* WorkspaceHUD.swift in Sources */,
+				F200000000000000000000B0 /* JarvisVoice.swift in Sources */,
+				F200000000000000000000B1 /* GeminiClient.swift in Sources */,
+				F200000000000000000000B2 /* HoloElements.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		F700000000000000000000A1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		F700000000000000000000A2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		F700000000000000000000A3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 472PHZCF99;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Aether/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aether.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		F700000000000000000000A4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 472PHZCF99;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Aether/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.aether.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F800000000000000000000A1 /* Build configuration list for PBXProject "Aether" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F700000000000000000000A1 /* Debug */,
+				F700000000000000000000A2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F800000000000000000000A2 /* Build configuration list for PBXNativeTarget "Aether" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F700000000000000000000A3 /* Debug */,
+				F700000000000000000000A4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = F600000000000000000000A1 /* Project object */;
+}
