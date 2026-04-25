@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Testbench</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #e0e0e0; padding: 32px; }
+    h1 { font-size: 1.4rem; margin-bottom: 24px; color: #fff; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px; }
+    .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .card h2 { font-size: 0.95rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em; }
+    label { font-size: 0.85rem; color: #888; }
+    input[type="file"], input[type="text"], input[type="number"] {
+      width: 100%; padding: 8px 10px; background: #111; border: 1px solid #333; border-radius: 6px;
+      color: #e0e0e0; font-size: 0.9rem;
+    }
+    button {
+      padding: 9px 16px; background: #2563eb; border: none; border-radius: 6px;
+      color: #fff; font-size: 0.9rem; cursor: pointer; align-self: flex-start;
+    }
+    button:hover { background: #1d4ed8; }
+    .output {
+      background: #111; border: 1px solid #2a2a2a; border-radius: 6px;
+      padding: 12px; font-size: 0.8rem; font-family: monospace; white-space: pre-wrap;
+      max-height: 260px; overflow-y: auto; color: #b0ffb0;
+    }
+    .output.error { color: #ff8080; }
+    .preview { display: flex; flex-wrap: wrap; gap: 8px; }
+    .preview img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #333; }
+    .tag { font-size: 0.75rem; background: #222; border-radius: 4px; padding: 2px 6px; color: #888; }
+    .base { font-size: 0.8rem; color: #555; margin-top: -4px; }
+  </style>
+</head>
+<body>
+  <h1>API Testbench</h1>
+  <p class="base">Base URL: <input id="baseUrl" type="text" value="http://127.0.0.1:8000" style="width:260px;display:inline-block" /></p>
+  <br/>
+  <div class="grid">
+
+    <!-- Health -->
+    <div class="card">
+      <h2>GET /health</h2>
+      <button onclick="req('GET', '/health', null, 'out-health')">Check</button>
+      <div class="output" id="out-health"></div>
+    </div>
+
+    <!-- Embed single -->
+    <div class="card">
+      <h2>POST /embed/image</h2>
+      <label>Image file</label>
+      <input type="file" id="embed-file" accept="image/*" />
+      <button onclick="embedImage()">Embed &amp; Save</button>
+      <div class="output" id="out-embed"></div>
+    </div>
+
+    <!-- Embed batch -->
+    <div class="card">
+      <h2>POST /embed/images/batch</h2>
+      <label>Images (up to 10)</label>
+      <input type="file" id="batch-files" accept="image/*" multiple />
+      <button onclick="embedBatch()">Embed Batch</button>
+      <div class="output" id="out-batch"></div>
+    </div>
+
+    <!-- Search by image -->
+    <div class="card">
+      <h2>POST /search/image</h2>
+      <label>Query image</label>
+      <input type="file" id="search-img-file" accept="image/*" />
+      <label>Top K</label>
+      <input type="number" id="search-img-k" value="5" min="1" max="50" />
+      <button onclick="searchByImage()">Search</button>
+      <div class="output" id="out-search-img"></div>
+    </div>
+
+    <!-- Search by text -->
+    <div class="card">
+      <h2>POST /search/text</h2>
+      <label>Text query</label>
+      <input type="text" id="search-text-q" placeholder="e.g. a cat on a beach" />
+      <label>Top K</label>
+      <input type="number" id="search-text-k" value="5" min="1" max="50" />
+      <button onclick="searchByText()">Search</button>
+      <div class="output" id="out-search-text"></div>
+    </div>
+
+    <!-- List images -->
+    <div class="card">
+      <h2>GET /images</h2>
+      <button onclick="listImages()">List All</button>
+      <div class="output" id="out-list"></div>
+    </div>
+
+    <!-- Fetch image by ID -->
+    <div class="card">
+      <h2>GET /images/:id</h2>
+      <label>Image ID</label>
+      <input type="text" id="fetch-id" placeholder="MongoDB ObjectId" />
+      <button onclick="fetchImage()">Fetch</button>
+      <div class="preview" id="out-fetch-img"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const base = () => document.getElementById('baseUrl').value.replace(/\/$/, '');
+
+    async function req(method, path, body, outId) {
+      const el = document.getElementById(outId);
+      el.className = 'output';
+      el.textContent = 'Loading…';
+      try {
+        const res = await fetch(base() + path, { method, body });
+        const text = await res.text();
+        let parsed;
+        try { parsed = JSON.parse(text); } catch { parsed = text; }
+        el.textContent = JSON.stringify(parsed, null, 2);
+        if (!res.ok) el.className = 'output error';
+      } catch (e) {
+        el.className = 'output error';
+        el.textContent = String(e);
+      }
+    }
+
+    async function embedImage() {
+      const file = document.getElementById('embed-file').files[0];
+      if (!file) return alert('Pick a file first');
+      const fd = new FormData();
+      fd.append('file', file);
+      await req('POST', '/embed/image', fd, 'out-embed');
+    }
+
+    async function embedBatch() {
+      const files = document.getElementById('batch-files').files;
+      if (!files.length) return alert('Pick files first');
+      const fd = new FormData();
+      for (const f of files) fd.append('files', f);
+      await req('POST', '/embed/images/batch', fd, 'out-batch');
+    }
+
+    async function searchByImage() {
+      const file = document.getElementById('search-img-file').files[0];
+      if (!file) return alert('Pick a file first');
+      const k = document.getElementById('search-img-k').value;
+      const fd = new FormData();
+      fd.append('file', file);
+      await req('POST', `/search/image?top_k=${k}`, fd, 'out-search-img');
+    }
+
+    async function searchByText() {
+      const q = document.getElementById('search-text-q').value.trim();
+      if (!q) return alert('Enter a query');
+      const k = document.getElementById('search-text-k').value;
+      await req('POST', `/search/text?query=${encodeURIComponent(q)}&top_k=${k}`, null, 'out-search-text');
+    }
+
+    async function listImages() {
+      await req('GET', '/images', null, 'out-list');
+    }
+
+    async function fetchImage() {
+      const id = document.getElementById('fetch-id').value.trim();
+      if (!id) return alert('Enter an ID');
+      const el = document.getElementById('out-fetch-img');
+      el.innerHTML = 'Loading…';
+      try {
+        const res = await fetch(base() + `/images/${id}`);
+        if (!res.ok) { el.innerHTML = `<span style="color:#f88">Error ${res.status}</span>`; return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        el.innerHTML = `<img src="${url}" />`;
+      } catch (e) {
+        el.innerHTML = `<span style="color:#f88">${e}</span>`;
+      }
+    }
+  </script>
+</body>
+</html>
