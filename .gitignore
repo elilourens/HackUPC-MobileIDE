@@ -2,6 +2,9 @@
 .env
 .mcp.json
 
+
+
+
 # Python
 __pycache__/
 *.py[cod]
