@@ -225,27 +225,17 @@ struct PlanHUDOverlay: View {
     }
 }
 
-/// Junie's signature 4-point sparkle. The intellij-community repo doesn't expose
-/// the AI Assistant icon under any of the names we tried, so we render the same
-/// shape ourselves in the official Junie green (#5FB865).
+/// Junie's official mark — green plus + curved "j" — loaded from the
+/// `JunieIcon` asset shipped with the app. `color` is ignored; the asset
+/// already carries Junie's brand green. The parameter is kept for call-site
+/// compatibility with earlier code that requested a tinted sparkle.
 struct JunieSparkle: View {
-    let color: Color
+    let color: Color = .green   // unused, kept for call-site compat
+    init(color: Color = .green) { _ = color }
     var body: some View {
-        Canvas { ctx, size in
-            let cx = size.width / 2, cy = size.height / 2
-            let r = min(cx, cy)
-            // 4-point star (long verticals + short horizontals)
-            let pts: [(CGFloat, CGFloat)] = [
-                (cx, cy - r), (cx + r * 0.28, cy - r * 0.28),
-                (cx + r, cy), (cx + r * 0.28, cy + r * 0.28),
-                (cx, cy + r), (cx - r * 0.28, cy + r * 0.28),
-                (cx - r, cy), (cx - r * 0.28, cy - r * 0.28)
-            ]
-            var path = Path()
-            path.move(to: CGPoint(x: pts[0].0, y: pts[0].1))
-            for p in pts.dropFirst() { path.addLine(to: CGPoint(x: p.0, y: p.1)) }
-            path.closeSubpath()
-            ctx.fill(path, with: .color(color))
-        }
+        Image("JunieIcon")
+            .resizable()
+            .renderingMode(.original)
+            .aspectRatio(contentMode: .fit)
     }
 }

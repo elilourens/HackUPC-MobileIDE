@@ -1831,11 +1831,24 @@ final class PanelManager {
         let errorRed     = JB.accentRed
         let outputDim    = JB.textInactive
 
-        // ---- Header row: green Junie sparkle + Junie wordmark + by JetBrains --
+        // ---- Header row: real Junie logo + Junie wordmark + by JetBrains -----
         var y: CGFloat = pad + 6
-        let sparkleR: CGFloat = headerFontSize * 0.46
+        let sparkleR: CGFloat = headerFontSize * 0.55
         let sparkleCenter = CGPoint(x: pad + 18 + sparkleR, y: y + sparkleR + 2)
-        drawGeminiSparkle(ctx, center: sparkleCenter, radius: sparkleR, color: JB.junieGreen)
+        let junieRect = CGRect(x: sparkleCenter.x - sparkleR,
+                               y: sparkleCenter.y - sparkleR,
+                               width: sparkleR * 2, height: sparkleR * 2)
+        if let junie = UIImage(named: "JunieIcon")?.cgImage {
+            ctx.saveGState()
+            // CoreGraphics origin is bottom-left when drawing CGImage into a UIKit
+            // top-left context — flip Y so the logo isn't upside-down.
+            ctx.translateBy(x: 0, y: junieRect.maxY + junieRect.minY)
+            ctx.scaleBy(x: 1, y: -1)
+            ctx.draw(junie, in: junieRect)
+            ctx.restoreGState()
+        } else {
+            drawGeminiSparkle(ctx, center: sparkleCenter, radius: sparkleR, color: JB.junieGreen)
+        }
 
         let titleX = sparkleCenter.x + sparkleR + 14
         // Lowercase wordmark — matches the actual Junie product mark.

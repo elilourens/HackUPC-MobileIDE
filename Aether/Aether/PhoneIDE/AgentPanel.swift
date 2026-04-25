@@ -39,8 +39,12 @@ struct AgentPanel: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Circle().fill(IJ.accentBlue).frame(width: 8, height: 8)
-            Text("arcreact")
+            Image("JunieIcon")
+                .resizable()
+                .renderingMode(.original)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 14, height: 14)
+            Text("junie")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(IJ.textPrimary)
             Spacer()
