@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum AppPhase {
+    case welcome
     case phoneIDE
     case placement
     case workspace
@@ -8,7 +9,7 @@ enum AppPhase {
 
 struct ContentView: View {
     @ObservedObject var session: ProjectSession
-    @State private var phase: AppPhase = .phoneIDE
+    @State private var phase: AppPhase = (UserDefaults.standard.bool(forKey: "aether.welcome.seen") ? .phoneIDE : .welcome)
     @StateObject private var sessionManager: ARSessionManager
     @StateObject private var voiceManager = VoiceManager()
     @State private var arPlacedOnce = false
@@ -24,14 +25,19 @@ struct ContentView: View {
         ZStack {
             // AR is mounted whenever we've ever entered AR — keeps the AR session,
             // anchor, and panel state alive across mode switches.
-            if arPlacedOnce || phase != .phoneIDE {
+            let arVisible: Bool = phase == .placement || phase == .workspace
+            if arPlacedOnce || arVisible {
                 ARWorkspaceView(sessionManager: sessionManager)
                     .ignoresSafeArea()
-                    .opacity(phase == .phoneIDE ? 0 : 1)
-                    .allowsHitTesting(phase != .phoneIDE)
+                    .opacity(arVisible ? 1 : 0)
+                    .allowsHitTesting(arVisible)
             }
 
             switch phase {
+            case .welcome:
+                WelcomeScreen(session: session, onOpen: dismissWelcome)
+                    .transition(.opacity)
+                    .ignoresSafeArea()
             case .phoneIDE:
                 PhoneIDEView(session: session, onEnterAR: enterAR)
                     .transition(.opacity)
@@ -71,7 +77,14 @@ struct ContentView: View {
             enterAR()
         case .placement, .workspace:
             exitAR()
+        case .welcome:
+            break
         }
+    }
+
+    private func dismissWelcome() {
+        UserDefaults.standard.set(true, forKey: "aether.welcome.seen")
+        withAnimation(.easeInOut(duration: 0.3)) { phase = .phoneIDE }
     }
 
     private func enterAR() {

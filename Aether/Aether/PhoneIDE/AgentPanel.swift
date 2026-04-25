@@ -35,7 +35,10 @@ struct AgentPanel: View {
         .animation(.easeOut(duration: 0.18), value: session.pendingPlan != nil)
     }
 
-    // MARK: Header
+    // MARK: Header — Junie tool window header (mode dropdown + kebab menu)
+
+    @State private var junieMode: JunieMode = .code
+    enum JunieMode: String, CaseIterable { case code = "Code", ask = "Ask", review = "Review" }
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -44,22 +47,59 @@ struct AgentPanel: View {
                 .renderingMode(.original)
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 14, height: 14)
-            Text("junie")
-                .font(.system(size: 13, weight: .medium))
+            Text("Junie")
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(IJ.textPrimary)
+
+            // Mode dropdown — Code / Ask / Review
+            Menu {
+                ForEach(JunieMode.allCases, id: \.self) { mode in
+                    Button(mode.rawValue) { junieMode = mode }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(junieMode.rawValue)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(IJ.textPrimary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(IJ.textSecondary)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(RoundedRectangle(cornerRadius: 4).fill(IJ.bgEditor))
+            }
+
             Spacer()
+
             Text("gpt-4o")
-                .font(.system(size: 11))
+                .font(.system(size: 10))
                 .foregroundColor(IJ.textSecondary)
+
+            // Kebab — clear chat / settings (stub for now)
+            Menu {
+                Button("Clear conversation") {
+                    // No public reset on session yet — append a separator instead.
+                    session.appendChat(.system, "— new conversation —")
+                }
+                Button("Cancel pending plan", role: .destructive) {
+                    session.pendingPlan = nil
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(IJ.textSecondary)
+                    .frame(width: 24, height: 24)
+            }
+
             Button(action: { withAnimation(.easeOut(duration: 0.2)) { collapsed.toggle() } }) {
                 Image(systemName: collapsed ? "chevron.up" : "chevron.down")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(IJ.textSecondary)
-                    .frame(width: 28, height: 24)
+                    .frame(width: 24, height: 24)
             }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 32)
+        .padding(.horizontal, 12)
+        .frame(height: 36)
         .background(IJ.bgSidebar)
         .overlay(Rectangle().fill(IJ.border).frame(height: 1), alignment: .bottom)
     }
