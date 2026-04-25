@@ -1,7 +1,5 @@
 fastapi
-uvicorn[standard]
-openai
-python-multipart
+uvicorn
+pydantic
 python-dotenv
-motor
-pymongo
+requests

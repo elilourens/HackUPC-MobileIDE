@@ -1,0 +1,1 @@
+from ghost.assistant import generate_ghost_reply
