@@ -1224,15 +1224,26 @@ final class PanelManager {
             ctx.addLine(to: CGPoint(x: guideX, y: rowRect.maxY))
             ctx.strokePath()
 
-            // File-type icon: small filled square in the type color.
-            let iconSide: CGFloat = sidebarFontSize * 0.62
+            // File-type icon: render the real JetBrains shield asset when
+            // available; fall back to the colored square if the asset is
+            // missing for that extension.
+            let iconSide: CGFloat = sidebarFontSize * 1.0
             let iconRect = CGRect(
                 x: fileIndent,
-                y: sy + sidebarFontSize * 0.30,
+                y: sy + sidebarFontSize * 0.10,
                 width: iconSide,
                 height: iconSide
             )
-            drawJBFileIcon(ctx, rect: iconRect, color: jbIconColor(for: file))
+            if let img = JBIconLoader.uiImageForFile(file)?.cgImage {
+                ctx.saveGState()
+                // Flip Y locally so the CGImage isn't upside-down.
+                ctx.translateBy(x: 0, y: iconRect.maxY + iconRect.minY)
+                ctx.scaleBy(x: 1, y: -1)
+                ctx.draw(img, in: iconRect)
+                ctx.restoreGState()
+            } else {
+                drawJBFileIcon(ctx, rect: iconRect, color: jbIconColor(for: file))
+            }
 
             let textColor: UIColor = isActive ? JB.textActive : JB.textInactive
             NSAttributedString(string: file, attributes: [

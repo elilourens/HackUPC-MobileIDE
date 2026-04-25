@@ -38,6 +38,7 @@
 		F200000000000000000000D9 /* StarterPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D9 /* StarterPage.swift */; };
 		F200000000000000000000DA /* PlanHUDOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DA /* PlanHUDOverlay.swift */; };
 		F200000000000000000000DB /* JBIcons in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DB /* JBIcons */; };
+		F200000000000000000000DC /* JBIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DC /* JBIcon.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -74,6 +75,7 @@
 		F100000000000000000000D9 /* StarterPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarterPage.swift; sourceTree = "<group>"; };
 		F100000000000000000000DA /* PlanHUDOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanHUDOverlay.swift; sourceTree = "<group>"; };
 		F100000000000000000000DB /* JBIcons */ = {isa = PBXFileReference; lastKnownFileType = folder; path = JBIcons; sourceTree = "<group>"; };
+		F100000000000000000000DC /* JBIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JBIcon.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -201,6 +203,7 @@
 				F100000000000000000000D4 /* SettingsSheet.swift */,
 				F100000000000000000000D5 /* PhoneIDEView.swift */,
 				F100000000000000000000D9 /* StarterPage.swift */,
+				F100000000000000000000DC /* JBIcon.swift */,
 			);
 			path = PhoneIDE;
 			sourceTree = "<group>";
@@ -313,6 +316,7 @@
 				F200000000000000000000D8 /* ShakeDetectorView.swift in Sources */,
 				F200000000000000000000D9 /* StarterPage.swift in Sources */,
 				F200000000000000000000DA /* PlanHUDOverlay.swift in Sources */,
+				F200000000000000000000DC /* JBIcon.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
