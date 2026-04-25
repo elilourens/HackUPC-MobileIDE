@@ -449,15 +449,15 @@ final class AmbientCircleEntity: Entity {
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let r: CGFloat = 540
 
-            // IntelliJ-blue tinted at 20% — subtle, not in-your-face.
+            // Neutral grey ambient — matches the JetBrains chrome palette.
             // Outer thin ring
-            g.setStrokeColor(Holo.intelBlue.withAlphaComponent(0.22).cgColor)
+            g.setStrokeColor(Holo.intelGrey.withAlphaComponent(0.40).cgColor)
             g.setLineWidth(2)
             g.addArc(center: center, radius: r, startAngle: 0, endAngle: .pi * 2, clockwise: false)
             g.strokePath()
 
             // Inner faint ring
-            g.setStrokeColor(Holo.intelBlueFaint.cgColor)
+            g.setStrokeColor(Holo.intelGrey.withAlphaComponent(0.18).cgColor)
             g.setLineWidth(1)
             g.addArc(center: center, radius: r - 60, startAngle: 0, endAngle: .pi * 2, clockwise: false)
             g.strokePath()
@@ -467,14 +467,14 @@ final class AmbientCircleEntity: Entity {
                 let a = CGFloat(i) * .pi * 2 / 48 - .pi / 2
                 let inner: CGFloat = i % 4 == 0 ? r - 28 : r - 12
                 let outer: CGFloat = r
-                g.setStrokeColor(Holo.intelBlue.withAlphaComponent(0.20).cgColor)
+                g.setStrokeColor(Holo.intelGrey.withAlphaComponent(i % 4 == 0 ? 0.45 : 0.25).cgColor)
                 g.setLineWidth(i % 4 == 0 ? 2 : 1)
                 g.move(to: CGPoint(x: center.x + cos(a) * inner, y: center.y + sin(a) * inner))
                 g.addLine(to: CGPoint(x: center.x + cos(a) * outer, y: center.y + sin(a) * outer))
                 g.strokePath()
             }
 
-            // Compass labels at N/E/S/W (dim grey, JetBrains-style).
+            // Compass labels — dim grey, JetBrains tracked caps.
             let labelFont = UIFont.monospacedSystemFont(ofSize: 36, weight: .semibold)
             let labels: [(String, CGPoint)] = [
                 ("SYS", CGPoint(x: center.x, y: center.y - r + 8)),  // top
@@ -485,7 +485,7 @@ final class AmbientCircleEntity: Entity {
             for (label, point) in labels {
                 NSAttributedString(string: label, attributes: [
                     .font: labelFont,
-                    .foregroundColor: Holo.intelBlue.withAlphaComponent(0.55),
+                    .foregroundColor: Holo.intelGrey.withAlphaComponent(0.55),
                     .kern: 4
                 ]).drawCentered(at: point)
             }
@@ -503,9 +503,9 @@ final class AmbientCircleEntity: Entity {
             ringPlane = plane
         }
 
-        // Four orbiting dots floating just above the ring — IntelliJ blue 20%.
+        // Four orbiting dots floating just above the ring — neutral grey.
         for i in 0..<4 {
-            let dot = Holo.sphere(radius: 0.006, color: Holo.intelBlue.withAlphaComponent(0.55))
+            let dot = Holo.sphere(radius: 0.006, color: Holo.intelGrey.withAlphaComponent(0.65))
             let a = Float(i) * .pi / 2
             dot.position = SIMD3<Float>(cos(a) * radius, 0.012, sin(a) * radius)
             addChild(dot)
