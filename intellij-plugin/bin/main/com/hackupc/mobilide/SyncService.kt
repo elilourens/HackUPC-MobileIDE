@@ -1,6 +1,7 @@
 package com.hackupc.mobilide
 
-import com.google.gson.JsonParser
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -8,79 +9,89 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import java.io.File
 import java.net.URI
+import java.net.URLEncoder
 import java.net.http.HttpClient
-import java.net.http.WebSocket
-import java.util.concurrent.CompletionStage
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 @Service(Service.Level.PROJECT)
 class SyncService(private val project: Project) {
 
-    var webSocket: WebSocket? = null
+    var isConnected = false
+        private set
     var onStatusChange: ((String) -> Unit)? = null
     var onIncomingChange: ((filename: String, code: String) -> Unit)? = null
 
+    private val http = HttpClient.newHttpClient()
+    private val gson = Gson()
+    private var baseUrl = ""
+    private var lastSeen: String? = null
+    private var scheduler: ScheduledExecutorService? = null
+
     fun connect(url: String) {
-        val client = HttpClient.newHttpClient()
-        val listener = object : WebSocket.Listener {
-            private val buffer = StringBuilder()
-
-            override fun onOpen(ws: WebSocket) {
-                ws.request(1)
-                ws.sendText("""{"type":"plugin"}""", true)
-                notifyStatus("Connected")
-            }
-
-            override fun onText(ws: WebSocket, data: CharSequence, last: Boolean): CompletionStage<*>? {
-                buffer.append(data)
-                if (last) {
-                    handleMessage(buffer.toString())
-                    buffer.clear()
-                }
-                ws.request(1)
-                return null
-            }
-
-            override fun onClose(ws: WebSocket, statusCode: Int, reason: String): CompletionStage<*>? {
-                webSocket = null
-                notifyStatus("Disconnected")
-                return null
-            }
-
-            override fun onError(ws: WebSocket, error: Throwable) {
-                webSocket = null
-                notifyStatus("Error: ${error.message}")
-            }
-        }
-
-        try {
-            client.newWebSocketBuilder()
-                .buildAsync(URI.create(url), listener)
-                .thenAccept { ws -> webSocket = ws }
-        } catch (e: Exception) {
-            notifyStatus("Failed: ${e.message}")
-        }
+        baseUrl = normalizeUrl(url)
+        isConnected = true
+        lastSeen = java.time.Instant.now().toString()
+        notifyStatus("Connected")
+        startPolling()
     }
 
     fun disconnect() {
-        webSocket?.sendClose(WebSocket.NORMAL_CLOSURE, "bye")
-        webSocket = null
+        isConnected = false
+        stopPolling()
         notifyStatus("Disconnected")
     }
 
     fun sendCode(filename: String, code: String) {
-        val ws = webSocket ?: return
-        val json = buildJsonMessage(filename, code)
-        ws.sendText(json, true)
+        val body = gson.toJson(mapOf(
+            "filename" to filename,
+            "content" to code,
+            "edit_type" to "plugin"
+        ))
+        val req = HttpRequest.newBuilder()
+            .uri(URI.create("$baseUrl/code-edits"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build()
+        http.sendAsync(req, HttpResponse.BodyHandlers.ofString()).exceptionally { null }
     }
 
-    private fun handleMessage(text: String) {
+    private fun startPolling() {
+        scheduler = Executors.newSingleThreadScheduledExecutor()
+        scheduler?.scheduleWithFixedDelay({ poll() }, 0, 1500, TimeUnit.MILLISECONDS)
+    }
+
+    private fun stopPolling() {
+        scheduler?.shutdownNow()
+        scheduler = null
+    }
+
+    private fun poll() {
+        if (!isConnected) return
         try {
-            val obj = JsonParser.parseString(text).asJsonObject
-            val filename = obj.get("filename")?.asString ?: return
-            val code = obj.get("code")?.asString ?: return
-            writeFileToProject(filename, code)
-            ApplicationManager.getApplication().invokeLater {
-                onIncomingChange?.invoke(filename, code)
+            val params = buildString {
+                append("source=ios")
+                lastSeen?.let { append("&since="); append(URLEncoder.encode(it, "UTF-8")) }
+            }
+            val req = HttpRequest.newBuilder()
+                .uri(URI.create("$baseUrl/code-edits?$params"))
+                .GET().build()
+            val res = http.send(req, HttpResponse.BodyHandlers.ofString())
+            if (res.statusCode() != 200) return
+            val type = object : TypeToken<List<Map<String, Any?>>>() {}.type
+            val edits: List<Map<String, Any?>> = gson.fromJson(res.body(), type)
+            for (edit in edits) {
+                val filename = edit["filename"] as? String ?: continue
+                val content = edit["content"] as? String ?: continue
+                val createdAt = edit["created_at"] as? String ?: continue
+                writeFileToProject(filename, content)
+                ApplicationManager.getApplication().invokeLater {
+                    onIncomingChange?.invoke(filename, content)
+                }
+                lastSeen = createdAt
             }
         } catch (_: Exception) {}
     }
@@ -90,7 +101,6 @@ class SyncService(private val project: Project) {
         val file = File(projectPath, filename)
         file.parentFile?.mkdirs()
         file.writeText(code)
-
         ApplicationManager.getApplication().invokeLater {
             val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
             if (vf != null) {
@@ -100,12 +110,12 @@ class SyncService(private val project: Project) {
         }
     }
 
-    private fun buildJsonMessage(filename: String, code: String): String {
-        val escapedFilename = filename.replace("\\", "\\\\").replace("\"", "\\\"")
-        val escapedCode = code.replace("\\", "\\\\").replace("\"", "\\\"")
-            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-        return """{"filename":"$escapedFilename","code":"$escapedCode"}"""
-    }
+    private fun normalizeUrl(url: String) = url
+        .replace(Regex("^ws://"), "http://")
+        .replace(Regex("^wss://"), "https://")
+        .substringBefore("/ws/")
+        .trimEnd('/')
+        .ifEmpty { "http://localhost:8000" }
 
     private fun notifyStatus(status: String) {
         ApplicationManager.getApplication().invokeLater {

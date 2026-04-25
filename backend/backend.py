@@ -783,10 +783,24 @@ async def add_code_edit(payload: CodeEditRequest):
 
 
 @app.get("/code-edits", response_model=list[CodeEditResponse])
-async def list_code_edits(filename: Optional[str] = None):
+async def list_code_edits(
+    filename: Optional[str] = None,
+    source: Optional[str] = None,
+    since: Optional[str] = None,
+):
     col = _require_code_edits_collection()
-    query = {"filename": filename} if filename else {}
-    docs = await col.find(query).sort("created_at", -1).to_list(length=None)
+    query: dict = {}
+    if filename:
+        query["filename"] = filename
+    if source:
+        query["edit_type"] = source
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            query["created_at"] = {"$gt": since_dt}
+        except Exception:
+            pass
+    docs = await col.find(query).sort("created_at", 1).to_list(length=None)
     return [CodeEditResponse(id=str(d["_id"]), **{k: v for k, v in d.items() if k != "_id"}) for d in docs]
 
 

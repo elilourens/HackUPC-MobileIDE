@@ -10,7 +10,7 @@ class FileSaveListener : FileDocumentManagerListener {
         val vf = FileDocumentManager.getInstance().getFile(document) ?: return
         val project = ProjectLocator.getInstance().guessProjectForFile(vf) ?: return
         val sync = SyncService.getInstance(project)
-        if (sync.webSocket == null) return
+        if (!sync.isConnected) return
         sync.sendCode(vf.name, document.text)
     }
 }

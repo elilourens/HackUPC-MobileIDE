@@ -14,7 +14,7 @@ import javax.swing.*
 
 class MobilIDEPanel(project: Project) : JBPanel<MobilIDEPanel>(BorderLayout()) {
     private val sync = SyncService.getInstance(project)
-    private val urlField = JBTextField("ws://localhost:8000/ws/sync")
+    private val urlField = JBTextField("http://localhost:8000")
     private val connectBtn = PillButton("Connect", primary = true)
     private val statusDot = StatusDot()
     private val statusText = JBLabel("Disconnected")
@@ -35,7 +35,7 @@ class MobilIDEPanel(project: Project) : JBPanel<MobilIDEPanel>(BorderLayout()) {
         }
         sync.onIncomingChange = { filename, code -> prependEntry(filename, code) }
         connectBtn.addActionListener {
-            if (sync.webSocket != null) sync.disconnect() else sync.connect(urlField.text.trim())
+            if (sync.isConnected) sync.disconnect() else sync.connect(urlField.text.trim())
         }
 
         val urlRow = JPanel(BorderLayout(8, 0)).apply { isOpaque = false }
