@@ -15,10 +15,12 @@ final class CodeGenerator {
     private let generateSystem = """
     You are AETHER, an AI coding assistant inside an AR IDE. Generate a complete, \
     self-contained single HTML file with all CSS inline in a <style> tag and all \
-    JavaScript inline in a <script> tag. The page should look modern, clean, and \
-    professional with good padding, typography, and color choices. Use a dark theme \
-    by default. Return ONLY the raw HTML code. No markdown backticks. No explanation. \
-    No comments. Just pure HTML that can be rendered directly in a browser.
+    JavaScript inline in a <script> tag. Generate beautiful, modern HTML with clean \
+    design. Use good padding, rounded corners, subtle shadows, nice typography, and a \
+    cohesive color scheme. The page should look like a polished product, not a default \
+    HTML form. Dark theme preferred. Return ONLY the raw HTML code. No markdown \
+    backticks. No explanation. No comments. Just pure HTML that can be rendered \
+    directly in a browser.
     """
 
     /// Generate a brand-new HTML page from a natural-language prompt.

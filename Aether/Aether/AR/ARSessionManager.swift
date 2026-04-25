@@ -393,9 +393,11 @@ final class ARSessionManager: NSObject, ObservableObject {
         case .left, .right:
             pm.cycleEditorTab(forward: direction == .right)
         case .up:
-            pm.scrollEditor(by: -3)
-        case .down:
+            // Swipe up = scroll forward through the code (line numbers increase).
+            // Matches iOS list-scrolling convention.
             pm.scrollEditor(by: 3)
+        case .down:
+            pm.scrollEditor(by: -3)
         }
     }
 
@@ -460,13 +462,18 @@ final class ARSessionManager: NSObject, ObservableObject {
                 session.isGenerating = true
                 JarvisVoice.shared.speak("On it sir.")
                 appendTerminalLog(.command, "generating index.html...")
-                panelManager?.showPanel(.preview)
+                // Don't show the preview yet — defer until the code lands so it
+                // can fly in (materialize) at the same moment as the rendered page.
                 CodeGenerator.shared.generate(prompt: prompt) { [weak self] result in
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
                         switch result {
                         case .success(let code):
                             self.session.setCode(code, forFile: "index.html", pushHistory: false)
+                            // Layout shifts FIRST so the editor + tree start sliding aside
+                            // while the preview is conjuring itself.
+                            self.panelManager?.enterLiveIDEMode()
+                            self.panelManager?.materializePreview()
                             self.panelManager?.setEditorCode(code, animated: true)
                             self.panelManager?.setLiveFiles(active: "index.html", files: Array(self.session.projectFiles.keys).sorted())
                             let lineCount = code.split(separator: "\n").count

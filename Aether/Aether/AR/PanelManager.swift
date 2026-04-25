@@ -20,6 +20,9 @@ final class PanelManager {
     private var assistantHighlight: ARSessionManager.BubbleHighlight = .none
     private(set) var theme: WorkspaceTheme = .dark
     private(set) var focusMode: Bool = false
+    /// True after enterLiveIDEMode() has run. Idempotent guard so subsequent
+    /// codegens don't re-trigger the layout-shift animation.
+    private(set) var liveIDEModeActive: Bool = false
 
     // Phase 2 — live IDE state
     /// When non-nil, drawEditor renders these lines (with HTML/CSS/JS highlighting)
@@ -84,8 +87,11 @@ final class PanelManager {
         //   file tree right edge ≈ -0.31, editor left/right ≈ ±0.25, terminal left edge ≈ +0.26.
         // Voice panels are pushed past those boundaries with a comfortable margin.
 
-        // Preview: far right, beyond terminal. Width 0.42 → half 0.21. Left edge at 0.59.
-        let previewPanel = makePanel(kind: .preview, width: 0.42, height: 0.36, isDark: false)
+        // Preview is THE dominant panel once code is generated. Default size 56×40 cm
+        // (well past the ≥40×30 spec). Initial position is far-right (kept for the
+        // legacy "show preview" voice command); enterLiveIDEMode() repositions it
+        // front-and-center when a real codegen run kicks in.
+        let previewPanel = makePanel(kind: .preview, width: 0.56, height: 0.40, isDark: false)
         previewPanel.position = SIMD3<Float>(0.80, 0.21, -0.03)
         previewPanel.transform.rotation = tilt
         previewPanel.transform.scale = SIMD3<Float>(0.001, 0.001, 0.001)
@@ -398,7 +404,18 @@ final class PanelManager {
     }
 
     func scrollEditor(by lines: Int) {
-        editorScrollOffset = max(0, min(20, editorScrollOffset + lines))
+        // Clamp to the actual code length when in live mode; fall back to a fixed cap
+        // for the Phase 1 hardcoded snippet.
+        let upperBound: Int
+        if let live = liveCode {
+            let total = live.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).count
+            // ~22 visible lines is what the editor draws by default; leave one as
+            // headroom so the last line of code is never alone at the top.
+            upperBound = Swift.max(0, total - 22)
+        } else {
+            upperBound = 20
+        }
+        editorScrollOffset = Swift.max(0, Swift.min(upperBound, editorScrollOffset + lines))
         regenerateEditor()
     }
 
@@ -411,11 +428,13 @@ final class PanelManager {
     // MARK: - Phase 2 live setters
 
     /// Set the live editor code. If `animated`, reveal it line by line at 80ms/line.
-    /// On a fresh animation we cancel any in-flight one.
+    /// On a fresh animation we cancel any in-flight one. Scroll offset is reset so
+    /// the user sees the new code from line 1.
     func setEditorCode(_ code: String, animated: Bool) {
         lineAnimationTimer?.invalidate()
         lineAnimationTimer = nil
         liveCode = code
+        editorScrollOffset = 0
 
         if animated {
             let total = code.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).count
@@ -449,6 +468,86 @@ final class PanelManager {
     func setPreviewImage(_ image: UIImage?) {
         previewImage = image
         regeneratePreview()
+    }
+
+    /// Switch the workspace into preview-dominant layout: editor / file tree / terminal
+    /// shrink and slide aside, preview drops into front-and-center, slightly elevated.
+    /// Idempotent — calling repeatedly has no visual effect after the first run.
+    func enterLiveIDEMode() {
+        guard !liveIDEModeActive else { return }
+        liveIDEModeActive = true
+
+        let dur: TimeInterval = 0.55
+
+        // Editor: shrink to ~65% and slide left.
+        if let editor = panels[.editor], let parent = editor.parent {
+            let target = Transform(
+                scale: SIMD3<Float>(0.65, 0.65, 1.0),
+                rotation: editor.transform.rotation,
+                translation: SIMD3<Float>(-0.42, 0.18, 0)
+            )
+            editor.move(to: target, relativeTo: parent, duration: dur, timingFunction: .easeInOut)
+        }
+
+        // File tree: shrink to 85% and tuck further left.
+        if let tree = panels[.fileTree], let parent = tree.parent {
+            let target = Transform(
+                scale: SIMD3<Float>(0.85, 0.85, 1.0),
+                rotation: tree.transform.rotation,
+                translation: SIMD3<Float>(-0.74, 0.18, 0.04)
+            )
+            tree.move(to: target, relativeTo: parent, duration: dur, timingFunction: .easeInOut)
+        }
+
+        // Terminal: shrink slightly and stay on the right.
+        if let terminal = panels[.terminal], let parent = terminal.parent {
+            let target = Transform(
+                scale: SIMD3<Float>(0.95, 0.95, 1.0),
+                rotation: terminal.transform.rotation,
+                translation: SIMD3<Float>(0.46, 0.13, 0.04)
+            )
+            terminal.move(to: target, relativeTo: parent, duration: dur, timingFunction: .easeInOut)
+        }
+
+        // Preview: front-and-center, slightly elevated. Reposition only — show
+        // animation runs separately via materializePreview().
+        if let preview = panels[.preview] {
+            preview.position = SIMD3<Float>(0, 0.30, 0.20)
+        }
+    }
+
+    /// Materialize the preview panel: scale 0.001 → 1.06 (overshoot, easeOut) →
+    /// 1.0 (settle, easeIn). Replaces a flat showPanel(.preview) when fresh code
+    /// has just been generated — feels like the page is conjuring itself.
+    func materializePreview() {
+        guard let preview = panels[.preview], let parent = preview.parent else { return }
+
+        // Reset to invisible scale so the animation always plays from zero, even if
+        // the panel was previously visible.
+        preview.isEnabled = true
+        preview.transform.scale = SIMD3<Float>(0.001, 0.001, 0.001)
+
+        let baseRotation = preview.transform.rotation
+        let basePosition = preview.transform.translation
+
+        let stage1 = Transform(
+            scale: SIMD3<Float>(1.06, 1.06, 1.06),
+            rotation: baseRotation,
+            translation: basePosition
+        )
+        preview.move(to: stage1, relativeTo: parent, duration: 0.55, timingFunction: .easeOut)
+
+        // Stage 2 fires after stage 1 finishes — shrinks the slight overshoot back
+        // to natural size for a tactile "settle" feel.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { [weak preview] in
+            guard let preview = preview, let parent = preview.parent else { return }
+            let stage2 = Transform(
+                scale: SIMD3<Float>(1, 1, 1),
+                rotation: preview.transform.rotation,
+                translation: preview.transform.translation
+            )
+            preview.move(to: stage2, relativeTo: parent, duration: 0.20, timingFunction: .easeIn)
+        }
     }
 
     /// Switch the file tree to live mode and render the given files (active file
@@ -754,15 +853,36 @@ final class PanelManager {
         if let live = liveCode {
             // Live code rendering with HTML/CSS/JS tokenization
             let allLines = live.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
-            let linesToRender = if let count = animatedLineCount {
-                Array(allLines.prefix(count))
+
+            // Determine the slice of lines to draw. During the typing animation we
+            // always render from line 0 up to animatedLineCount (no scroll). When
+            // fully typed we honor editorScrollOffset and render a window of lines
+            // starting there.
+            let firstLine: Int
+            let lastLine: Int
+            if let count = animatedLineCount {
+                firstLine = 0
+                lastLine = min(count, allLines.count)
             } else {
-                allLines
+                firstLine = min(max(0, editorScrollOffset), max(0, allLines.count - 1))
+                // Visible cap based on the same denominator drawEditor uses for font sizing.
+                let visibleCap = max(8, Int((codeBottom - codeTop) / (codeFontSize * 1.42)))
+                lastLine = min(allLines.count, firstLine + visibleCap + 4)
+            }
+            let linesToRender = firstLine < lastLine ? Array(allLines[firstLine..<lastLine]) : []
+
+            // Replay language state from the very first line so blocks beginning
+            // before the scroll window still color correctly.
+            var currentLang: WebLang = .html
+            for skipped in allLines.prefix(firstLine) {
+                if skipped.contains("<style") { currentLang = .css }
+                else if skipped.contains("</style>") { currentLang = .html }
+                else if skipped.contains("<script") { currentLang = .js }
+                else if skipped.contains("</script>") { currentLang = .html }
             }
 
-            // Scan for language state changes
-            var currentLang: WebLang = .html
-            for (idx, line) in linesToRender.enumerated() {
+            for (relIdx, line) in linesToRender.enumerated() {
+                let absIdx = firstLine + relIdx
                 // Track style and script tags
                 if line.contains("<style") {
                     currentLang = .css
@@ -774,7 +894,7 @@ final class PanelManager {
                     currentLang = .html
                 }
 
-                let numStr = NSAttributedString(string: String(format: "%2d", idx + 1), attributes: [
+                let numStr = NSAttributedString(string: String(format: "%3d", absIdx + 1), attributes: [
                     .font: codeFont,
                     .foregroundColor: Jarvis.synLineNum
                 ])
