@@ -42,6 +42,7 @@ VISION_MODEL = "gpt-4o"
 BUILD_MODEL = "gpt-5.4"
 DB_NAME = "mobileide"
 COLLECTION = "images"
+CODE_EDITS_COLLECTION = "code_edits"
 
 BUILD_SYSTEM_PROMPT = """You are a world-class frontend developer at Vercel. Generate a single HTML file.
 
@@ -96,9 +97,11 @@ async def startup():
     if mongo_uri:
         app.state.mongo = AsyncIOMotorClient(mongo_uri)
         app.state.col = app.state.mongo[DB_NAME][COLLECTION]
+        app.state.code_edits_col = app.state.mongo[DB_NAME][CODE_EDITS_COLLECTION]
     else:
         app.state.mongo = None
         app.state.col = None
+        app.state.code_edits_col = None
 
 
 @app.on_event("shutdown")
@@ -184,6 +187,13 @@ def _require_openai() -> OpenAI:
 
 def _require_mongo_collection():
     col = getattr(app.state, "col", None)
+    if col is None:
+        raise HTTPException(500, "MONGODB_URI is not set or MongoDB is unavailable")
+    return col
+
+
+def _require_code_edits_collection():
+    col = getattr(app.state, "code_edits_col", None)
     if col is None:
         raise HTTPException(500, "MONGODB_URI is not set or MongoDB is unavailable")
     return col
@@ -737,6 +747,60 @@ def api_modify_element(payload: ModifyElementRequest) -> BuildResponse:
         ]
     )
     return BuildResponse(html=html, success=True)
+
+
+class CodeEditRequest(BaseModel):
+    filename: str
+    content: str
+    previous_content: Optional[str] = None
+    edit_type: Optional[str] = None
+    description: Optional[str] = None
+
+
+class CodeEditResponse(BaseModel):
+    id: str
+    filename: str
+    content: str
+    previous_content: Optional[str]
+    edit_type: Optional[str]
+    description: Optional[str]
+    created_at: datetime
+
+
+@app.post("/code-edits", response_model=CodeEditResponse)
+async def add_code_edit(payload: CodeEditRequest):
+    col = _require_code_edits_collection()
+    doc = {
+        "filename": payload.filename,
+        "content": payload.content,
+        "previous_content": payload.previous_content,
+        "edit_type": payload.edit_type,
+        "description": payload.description,
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await col.insert_one(doc)
+    return CodeEditResponse(id=str(result.inserted_id), **doc)
+
+
+@app.get("/code-edits", response_model=list[CodeEditResponse])
+async def list_code_edits(filename: Optional[str] = None):
+    col = _require_code_edits_collection()
+    query = {"filename": filename} if filename else {}
+    docs = await col.find(query).sort("created_at", -1).to_list(length=None)
+    return [CodeEditResponse(id=str(d["_id"]), **{k: v for k, v in d.items() if k != "_id"}) for d in docs]
+
+
+@app.delete("/code-edits/{edit_id}")
+async def delete_code_edit(edit_id: str):
+    col = _require_code_edits_collection()
+    try:
+        oid = ObjectId(edit_id)
+    except Exception:
+        raise HTTPException(400, "Invalid edit id")
+    result = await col.delete_one({"_id": oid})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Code edit not found")
+    return {"deleted": edit_id}
 
 
 @app.delete("/images/{image_id}")
