@@ -87,31 +87,31 @@ def render(spec: dict) -> dict[str, str]:
     for idx, proj in enumerate(projects[:4]):
         img_id = project_images[idx] if idx < len(project_images) else project_images[0]
         projects_html += f"""
-    <div class="group rounded-2xl overflow-hidden border border-neutral-800 hover:border-{accent_light} transition-colors bg-neutral-900 bg-opacity-30">
-      <div class="relative overflow-hidden h-64">
-        <img src="https://images.unsplash.com/photo-{img_id}?w=800&h=600&fit=crop&auto=format&q=80" alt="{proj.get('title', 'Project')}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+    <div className="group rounded-2xl overflow-hidden border border-neutral-800 hover:border-{accent_light} transition-colors bg-neutral-900 bg-opacity-30">
+      <div className="relative overflow-hidden h-64">
+        <img src="https://images.unsplash.com/photo-{img_id}?w=800&h=600&fit=crop&auto=format&q=80" alt="{proj.get('title', 'Project')}" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
       </div>
-      <div class="p-6">
-        <p class="text-{accent_light} text-sm font-semibold uppercase tracking-widest mb-2">{proj.get('role', 'Project')}</p>
-        <h3 class="text-xl font-bold text-neutral-50 mb-2">{proj.get('title', 'Project')}</h3>
-        <p class="text-neutral-400 leading-relaxed">{proj.get('description', '')}</p>
+      <div className="p-6">
+        <p className="text-{accent_light} text-sm font-semibold uppercase tracking-widest mb-2">{proj.get('role', 'Project')}</p>
+        <h3 className="text-xl font-bold text-neutral-50 mb-2">{proj.get('title', 'Project')}</h3>
+        <p className="text-neutral-400 leading-relaxed">{proj.get('description', '')}</p>
       </div>
     </div>"""
 
     # Build skills HTML
     skills_html = ""
     for skill in skills[:8]:
-        skills_html += f'<div class="px-4 py-2 rounded-full border border-neutral-700 text-neutral-300 text-sm">{skill}</div>'
+        skills_html += f'<div className="px-4 py-2 rounded-full border border-neutral-700 text-neutral-300 text-sm">{skill}</div>'
 
     app_jsx = f'''function Header() {{
   return (
-    <header class="sticky top-0 bg-neutral-950 bg-opacity-95 border-b border-neutral-800 px-6 py-4 z-50">
-      <div class="max-w-6xl mx-auto flex justify-between items-center">
-        <h1 class="text-2xl font-bold text-neutral-50">{name}</h1>
-        <nav class="flex gap-8 hidden sm:flex">
-          <a href="#work" class="text-neutral-400 hover:text-{accent_light} transition-colors">Work</a>
-          <a href="#about" class="text-neutral-400 hover:text-{accent_light} transition-colors">About</a>
-          <a href="#contact" class="text-neutral-400 hover:text-{accent_light} transition-colors">Contact</a>
+    <header className="sticky top-0 bg-neutral-950 bg-opacity-95 border-b border-neutral-800 px-6 py-4 z-50">
+      <div className="max-w-6xl mx-auto flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-neutral-50">{name}</h1>
+        <nav className="flex gap-8 hidden sm:flex">
+          <a href="#work" className="text-neutral-400 hover:text-{accent_light} transition-colors">Work</a>
+          <a href="#about" className="text-neutral-400 hover:text-{accent_light} transition-colors">About</a>
+          <a href="#contact" className="text-neutral-400 hover:text-{accent_light} transition-colors">Contact</a>
         </nav>
       </div>
     </header>
@@ -120,11 +120,11 @@ def render(spec: dict) -> dict[str, str]:
 
 function Hero() {{
   return (
-    <section class="min-h-screen bg-neutral-950 flex items-center justify-center px-6 py-32">
-      <div class="max-w-4xl mx-auto text-center">
-        <p class="text-{accent_light} text-sm font-semibold uppercase tracking-widest mb-4">{title}</p>
-        <h1 class="text-6xl md:text-7xl font-bold tracking-tight text-neutral-50 mb-6">{hero_tagline}</h1>
-        <p class="text-xl text-neutral-400 max-w-2xl mx-auto leading-relaxed">{bio}</p>
+    <section className="min-h-screen bg-neutral-950 flex items-center justify-center px-6 py-32">
+      <div className="max-w-4xl mx-auto text-center">
+        <p className="text-{accent_light} text-sm font-semibold uppercase tracking-widest mb-4">{title}</p>
+        <h1 className="text-6xl md:text-7xl font-bold tracking-tight text-neutral-50 mb-6">{hero_tagline}</h1>
+        <p className="text-xl text-neutral-400 max-w-2xl mx-auto leading-relaxed">{bio}</p>
       </div>
     </section>
   );
@@ -132,10 +132,10 @@ function Hero() {{
 
 function Work() {{
   return (
-    <section id="work" class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-6xl mx-auto">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-16">Recent work</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">{projects_html}
+    <section id="work" className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-6xl mx-auto">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-16">Recent work</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">{projects_html}
         </div>
       </div>
     </section>
@@ -144,13 +144,13 @@ function Work() {{
 
 function About() {{
   return (
-    <section id="about" class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-4xl mx-auto">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-8">{about_headline}</h2>
-        <p class="text-lg text-neutral-400 leading-relaxed mb-12">{about_body}</p>
+    <section id="about" className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-8">{about_headline}</h2>
+        <p className="text-lg text-neutral-400 leading-relaxed mb-12">{about_body}</p>
         <div>
-          <h3 class="text-lg font-semibold text-neutral-50 mb-6">Skills</h3>
-          <div class="flex flex-wrap gap-3">{skills_html}
+          <h3 className="text-lg font-semibold text-neutral-50 mb-6">Skills</h3>
+          <div className="flex flex-wrap gap-3">{skills_html}
           </div>
         </div>
       </div>
@@ -160,11 +160,11 @@ function About() {{
 
 function Contact() {{
   return (
-    <section id="contact" class="py-24 bg-neutral-900 px-6">
-      <div class="max-w-4xl mx-auto text-center">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-4">{contact_headline}</h2>
-        <p class="text-lg text-neutral-400 mb-8">{contact_subheadline}</p>
-        <button class="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors">{contact_cta}</button>
+    <section id="contact" className="py-24 bg-neutral-900 px-6">
+      <div className="max-w-4xl mx-auto text-center">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-4">{contact_headline}</h2>
+        <p className="text-lg text-neutral-400 mb-8">{contact_subheadline}</p>
+        <button className="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors">{contact_cta}</button>
       </div>
     </section>
   );
@@ -172,7 +172,7 @@ function Contact() {{
 
 function App() {{
   return (
-    <div class="bg-neutral-950">
+    <div className="bg-neutral-950">
       <Header />
       <Hero />
       <Work />

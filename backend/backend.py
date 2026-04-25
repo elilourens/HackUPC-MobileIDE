@@ -881,10 +881,10 @@ def _bundle_react_preview(files: dict[str, str]) -> str:
     }},
   }};
 </script>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin="anonymous"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   /* Base dark-theme fallback so the page still looks intentional even if
@@ -901,6 +901,24 @@ def _bundle_react_preview(files: dict[str, str]) -> str:
 </head>
 <body class="bg-neutral-950 text-neutral-50">
 <div id="root"></div>
+<script>
+  // Global error handler to capture cross-origin script errors that would
+  // otherwise show as "Script error." with no details. This handler surfaces
+  // the real error message + stack in the UI and console.
+  window.__errors = [];
+  window.addEventListener('error', function(event) {{
+    const msg = (event && event.message) || event;
+    const stack = (event && event.error && event.error.stack) || '';
+    const info = msg + (stack ? '\\n' + stack : '');
+    window.__errors.push(info);
+    console.error('GLOBAL ERROR HANDLER:', info);
+    // Paint the error into #root if it happens before Babel/React loads
+    const root = document.getElementById('root');
+    if (root && root.children.length === 0) {{
+      root.innerHTML = '<pre style="padding:24px;color:#f87171;font:12px ui-monospace,monospace;white-space:pre-wrap;background:#0a0a0a">Preview error:\\n' + info + '</pre>';
+    }}
+  }}, true);
+</script>
 <script type="text/babel" data-presets="react">
   // Hoist every common React hook + Fragment up so user code can call them
   // without an explicit import. The bundler stripped the imports.
@@ -1195,6 +1213,76 @@ def api_modify_element(payload: ModifyElementRequest) -> BuildResponse:
         ]
     )
     return _build_response_from_project(data)
+
+
+class AnalyzeRequest(BaseModel):
+    files: dict[str, str]
+    question: str
+
+
+class AnalyzeResponse(BaseModel):
+    response: str
+    success: bool
+
+
+# Hard cap so we never blow past the model context window. We slice each
+# file independently rather than the whole bundle so the most relevant
+# files (App.jsx, etc.) get full content rather than being truncated last.
+_ANALYZE_FILE_CHAR_CAP = 8000
+_ANALYZE_TOTAL_CHAR_CAP = 40000
+
+
+def _pack_files_for_analyze(files: dict[str, str]) -> str:
+    """Format the project as one prompt blob: `=== path ===\n<body>` per
+    file, truncating overly large files and the whole pack if needed."""
+    parts: list[str] = []
+    used = 0
+    for path in sorted(files.keys()):
+        body = files[path] or ""
+        if len(body) > _ANALYZE_FILE_CHAR_CAP:
+            body = body[:_ANALYZE_FILE_CHAR_CAP] + "\n... [truncated]"
+        chunk = f"=== {path} ===\n{body}\n"
+        if used + len(chunk) > _ANALYZE_TOTAL_CHAR_CAP:
+            parts.append("... [remaining files omitted to fit context]\n")
+            break
+        parts.append(chunk)
+        used += len(chunk)
+    return "\n".join(parts)
+
+
+@app.post("/api/analyze", response_model=AnalyzeResponse)
+def analyze_project(payload: AnalyzeRequest):
+    """Generic project Q&A — feed every file + a free-form question to GPT
+    and return the plain-text answer. Used by AR voice queries ("what does
+    Login do?"), AR code review (rates quality/security/perf/a11y), and
+    cross-file lookups. Plain string output; callers parse if they need
+    structure."""
+    if not payload.files:
+        raise HTTPException(400, "no files provided")
+    if not (payload.question or "").strip():
+        raise HTTPException(400, "question is empty")
+
+    client = _require_openai()
+    project_blob = _pack_files_for_analyze(payload.files)
+    system = (
+        "You are a senior software engineer reviewing a multi-file project. "
+        "Answer the user's question precisely using ONLY the files provided. "
+        "If you cite a file, use its path. If you cite a line, include the "
+        "line number. Be concise — no preamble, no apology, no markdown "
+        "fences unless they would actually be code. Plain text by default."
+    )
+    user = f"PROJECT FILES:\n\n{project_blob}\n\nQUESTION:\n{payload.question}"
+    response = client.chat.completions.create(
+        model=BUILD_MODEL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user",   "content": user},
+        ],
+        temperature=0.3,
+        max_tokens=900,
+    )
+    text = (response.choices[0].message.content or "").strip()
+    return AnalyzeResponse(response=text, success=True)
 
 
 class CodeEditRequest(BaseModel):

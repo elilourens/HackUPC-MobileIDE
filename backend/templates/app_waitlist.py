@@ -54,34 +54,34 @@ def render(spec: dict) -> dict[str, str]:
     features_html = ""
     for feat in features[:4]:
         features_html += f"""
-    <div class="rounded-xl border border-neutral-800 bg-neutral-900 bg-opacity-30 p-8 hover:border-{accent_light} transition-colors">
-      <div class="text-4xl mb-4">{feat.get('emoji', '✨')}</div>
-      <h3 class="text-lg font-semibold text-neutral-50 mb-3">{feat.get('title', 'Feature')}</h3>
-      <p class="text-neutral-400">{feat.get('description', '')}</p>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 bg-opacity-30 p-8 hover:border-{accent_light} transition-colors">
+      <div className="text-4xl mb-4">{feat.get('emoji', '✨')}</div>
+      <h3 className="text-lg font-semibold text-neutral-50 mb-3">{feat.get('title', 'Feature')}</h3>
+      <p className="text-neutral-400">{feat.get('description', '')}</p>
     </div>"""
 
     app_jsx = f'''function Hero() {{
   return (
-    <section class="min-h-screen bg-neutral-950 flex items-center justify-center px-6 py-32">
-      <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+    <section className="min-h-screen bg-neutral-950 flex items-center justify-center px-6 py-32">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
         <div>
-          <p class="text-{accent_light} text-sm font-semibold uppercase tracking-widest mb-4">{app_name}</p>
-          <h1 class="text-6xl md:text-7xl font-bold tracking-tight text-neutral-50 mb-6">{hero_headline}</h1>
-          <p class="text-xl text-neutral-400 leading-relaxed mb-8">{tagline}</p>
-          <div class="flex gap-3 flex-wrap">
-            <span class="px-4 py-2 rounded-full bg-neutral-900 text-neutral-300 text-sm border border-neutral-800">iOS</span>
-            <span class="px-4 py-2 rounded-full bg-neutral-900 text-neutral-300 text-sm border border-neutral-800">Android</span>
-            <span class="px-4 py-2 rounded-full bg-neutral-900 text-neutral-300 text-sm border border-neutral-800">Web</span>
+          <p className="text-{accent_light} text-sm font-semibold uppercase tracking-widest mb-4">{app_name}</p>
+          <h1 className="text-6xl md:text-7xl font-bold tracking-tight text-neutral-50 mb-6">{hero_headline}</h1>
+          <p className="text-xl text-neutral-400 leading-relaxed mb-8">{tagline}</p>
+          <div className="flex gap-3 flex-wrap">
+            <span className="px-4 py-2 rounded-full bg-neutral-900 text-neutral-300 text-sm border border-neutral-800">iOS</span>
+            <span className="px-4 py-2 rounded-full bg-neutral-900 text-neutral-300 text-sm border border-neutral-800">Android</span>
+            <span className="px-4 py-2 rounded-full bg-neutral-900 text-neutral-300 text-sm border border-neutral-800">Web</span>
           </div>
         </div>
-        <div class="flex justify-center">
-          <div class="relative">
-            <div class="absolute inset-0 bg-{accent_light} opacity-5 blur-3xl rounded-3xl"></div>
-            <div class="relative bg-gradient-to-b from-neutral-800 to-neutral-900 rounded-3xl border-8 border-neutral-700 w-64 h-96 flex items-center justify-center shadow-2xl">
-              <div class="w-full h-full rounded-2xl bg-{accent_light} bg-opacity-10 flex items-center justify-center">
-                <div class="text-center">
-                  <div class="text-6xl mb-4">📱</div>
-                  <p class="text-neutral-400 text-sm">Coming soon</p>
+        <div className="flex justify-center">
+          <div className="relative">
+            <div className="absolute inset-0 bg-{accent_light} opacity-5 blur-3xl rounded-3xl"></div>
+            <div className="relative bg-gradient-to-b from-neutral-800 to-neutral-900 rounded-3xl border-8 border-neutral-700 w-64 h-96 flex items-center justify-center shadow-2xl">
+              <div className="w-full h-full rounded-2xl bg-{accent_light} bg-opacity-10 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-6xl mb-4">📱</div>
+                  <p className="text-neutral-400 text-sm">Coming soon</p>
                 </div>
               </div>
             </div>
@@ -94,10 +94,10 @@ def render(spec: dict) -> dict[str, str]:
 
 function Features() {{
   return (
-    <section class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-6xl mx-auto">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-16 text-center">What makes it special</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">{features_html}
+    <section className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-6xl mx-auto">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-16 text-center">What makes it special</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">{features_html}
         </div>
       </div>
     </section>
@@ -115,25 +115,25 @@ function Signup() {{
   }};
 
   return (
-    <section class="py-24 bg-neutral-900 px-6">
-      <div class="max-w-2xl mx-auto text-center">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-4">{signup_headline}</h2>
-        <p class="text-lg text-neutral-400 mb-12">{signup_subheadline}</p>
-        <form onSubmit={{handleSubmit}} class="flex flex-col sm:flex-row gap-3 mb-6">
+    <section className="py-24 bg-neutral-900 px-6">
+      <div className="max-w-2xl mx-auto text-center">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-4">{signup_headline}</h2>
+        <p className="text-lg text-neutral-400 mb-12">{signup_subheadline}</p>
+        <form onSubmit={{handleSubmit}} className="flex flex-col sm:flex-row gap-3 mb-6">
           <input
             type="email"
             placeholder="you@email.com"
             value={{email}}
             onChange={{(e) => setEmail(e.target.value)}}
             required
-            class="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-6 py-3 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:border-{accent_light}"
+            className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg px-6 py-3 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:border-{accent_light}"
           />
-          <button type="submit" class="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors whitespace-nowrap">
+          <button type="submit" className="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors whitespace-nowrap">
             {signup_button}
           </button>
         </form>
         {{submitted && (
-          <div class="bg-{accent_light} bg-opacity-10 border border-{accent_light} rounded-lg p-4 text-{accent_light} text-sm">
+          <div className="bg-{accent_light} bg-opacity-10 border border-{accent_light} rounded-lg p-4 text-{accent_light} text-sm">
             ✓ {early_access_message}
           </div>
         )}}
@@ -144,9 +144,9 @@ function Signup() {{
 
 function Footer() {{
   return (
-    <footer class="py-12 bg-neutral-950 border-t border-neutral-800 px-6">
-      <div class="max-w-6xl mx-auto text-center">
-        <p class="text-neutral-500 text-sm">No spam. We'll only email you when we launch.</p>
+    <footer className="py-12 bg-neutral-950 border-t border-neutral-800 px-6">
+      <div className="max-w-6xl mx-auto text-center">
+        <p className="text-neutral-500 text-sm">No spam. We'll only email you when we launch.</p>
       </div>
     </footer>
   );
@@ -154,7 +154,7 @@ function Footer() {{
 
 function App() {{
   return (
-    <div class="bg-neutral-950">
+    <div className="bg-neutral-950">
       <Hero />
       <Features />
       <Signup />

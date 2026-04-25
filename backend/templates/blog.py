@@ -97,26 +97,26 @@ def render(spec: dict) -> dict[str, str]:
     posts_html = ""
     for post in posts[:5]:
         posts_html += f"""
-    <article class="rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors p-6 bg-neutral-900 bg-opacity-20 group cursor-pointer">
-      <div class="flex items-start justify-between mb-4">
-        <h3 class="text-xl font-bold text-neutral-50 group-hover:text-{accent_light} transition-colors flex-1 leading-tight">{post.get('title', 'Post')}</h3>
+    <article className="rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors p-6 bg-neutral-900 bg-opacity-20 group cursor-pointer">
+      <div className="flex items-start justify-between mb-4">
+        <h3 className="text-xl font-bold text-neutral-50 group-hover:text-{accent_light} transition-colors flex-1 leading-tight">{post.get('title', 'Post')}</h3>
       </div>
-      <p class="text-neutral-400 mb-4 leading-relaxed">{post.get('excerpt', '')}</p>
-      <div class="flex items-center justify-between text-sm text-neutral-500">
-        <div class="flex gap-4">
+      <p className="text-neutral-400 mb-4 leading-relaxed">{post.get('excerpt', '')}</p>
+      <div className="flex items-center justify-between text-sm text-neutral-500">
+        <div className="flex gap-4">
           <span>{post.get('author', 'Author')}</span>
           <span>•</span>
           <span>{post.get('date', 'Date')}</span>
         </div>
-        <span class="px-3 py-1 rounded-full bg-neutral-800 text-neutral-300 text-xs font-medium">{post.get('category', 'Category')}</span>
+        <span className="px-3 py-1 rounded-full bg-neutral-800 text-neutral-300 text-xs font-medium">{post.get('category', 'Category')}</span>
       </div>
     </article>"""
 
     app_jsx = f'''function Header() {{
   return (
-    <header class="sticky top-0 bg-neutral-950 bg-opacity-95 border-b border-neutral-800 px-6 py-4 z-50">
-      <div class="max-w-4xl mx-auto">
-        <h1 class="text-2xl font-bold text-neutral-50">{blog_name}</h1>
+    <header className="sticky top-0 bg-neutral-950 bg-opacity-95 border-b border-neutral-800 px-6 py-4 z-50">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold text-neutral-50">{blog_name}</h1>
       </div>
     </header>
   );
@@ -124,22 +124,22 @@ def render(spec: dict) -> dict[str, str]:
 
 function FeaturedPost() {{
   return (
-    <section class="bg-neutral-950 px-6 py-32">
-      <div class="max-w-4xl mx-auto">
-        <div class="mb-4">
-          <span class="text-{accent_light} text-sm font-semibold uppercase tracking-widest">Featured</span>
+    <section className="bg-neutral-950 px-6 py-32">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-4">
+          <span className="text-{accent_light} text-sm font-semibold uppercase tracking-widest">Featured</span>
         </div>
-        <h1 class="text-5xl md:text-6xl font-bold tracking-tight text-neutral-50 mb-6">{featured_title}</h1>
-        <p class="text-xl text-neutral-400 mb-8 leading-relaxed max-w-2xl">{featured_excerpt}</p>
-        <div class="flex items-center gap-4">
-          <div class="w-10 h-10 rounded-full bg-{accent_light} bg-opacity-20"></div>
+        <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-neutral-50 mb-6">{featured_title}</h1>
+        <p className="text-xl text-neutral-400 mb-8 leading-relaxed max-w-2xl">{featured_excerpt}</p>
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-{accent_light} bg-opacity-20"></div>
           <div>
-            <p class="font-semibold text-neutral-50">{featured_author}</p>
-            <p class="text-sm text-neutral-400">{featured_date} · {featured_read_time}</p>
+            <p className="font-semibold text-neutral-50">{featured_author}</p>
+            <p className="text-sm text-neutral-400">{featured_date} · {featured_read_time}</p>
           </div>
         </div>
-        <div class="mt-12 rounded-2xl overflow-hidden border border-neutral-800">
-          <img src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=1200&h=600&fit=crop&auto=format&q=80" alt="Featured post" class="w-full h-auto" />
+        <div className="mt-12 rounded-2xl overflow-hidden border border-neutral-800">
+          <img src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=1200&h=600&fit=crop&auto=format&q=80" alt="Featured post" className="w-full h-auto" />
         </div>
       </div>
     </section>
@@ -148,10 +148,10 @@ function FeaturedPost() {{
 
 function PostsList() {{
   return (
-    <section class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-4xl mx-auto">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-12">Latest posts</h2>
-        <div class="space-y-6">{posts_html}
+    <section className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-12">Latest posts</h2>
+        <div className="space-y-6">{posts_html}
         </div>
       </div>
     </section>
@@ -160,10 +160,10 @@ function PostsList() {{
 
 function About() {{
   return (
-    <section class="py-24 bg-neutral-900 px-6">
-      <div class="max-w-4xl mx-auto">
-        <h2 class="text-3xl font-bold text-neutral-50 mb-6">{about_headline}</h2>
-        <p class="text-lg text-neutral-400 leading-relaxed">{about_bio}</p>
+    <section className="py-24 bg-neutral-900 px-6">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-3xl font-bold text-neutral-50 mb-6">{about_headline}</h2>
+        <p className="text-lg text-neutral-400 leading-relaxed">{about_bio}</p>
       </div>
     </section>
   );
@@ -180,24 +180,24 @@ function Subscribe() {{
   }};
 
   return (
-    <section class="py-24 bg-neutral-950 px-6 border-t border-neutral-800">
-      <div class="max-w-2xl mx-auto text-center">
-        <h2 class="text-4xl font-bold text-neutral-50 mb-6">{subscribe_headline}</h2>
-        <form onSubmit={{handleSubmit}} class="flex flex-col sm:flex-row gap-3">
+    <section className="py-24 bg-neutral-950 px-6 border-t border-neutral-800">
+      <div className="max-w-2xl mx-auto text-center">
+        <h2 className="text-4xl font-bold text-neutral-50 mb-6">{subscribe_headline}</h2>
+        <form onSubmit={{handleSubmit}} className="flex flex-col sm:flex-row gap-3">
           <input
             type="email"
             placeholder="you@email.com"
             value={{email}}
             onChange={{(e) => setEmail(e.target.value)}}
             required
-            class="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:border-{accent_light}"
+            className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:border-{accent_light}"
           />
-          <button type="submit" class="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors">
+          <button type="submit" className="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors">
             Subscribe
           </button>
         </form>
         {{submitted && (
-          <p class="text-{accent_light} text-sm mt-4">✓ Thanks for subscribing!</p>
+          <p className="text-{accent_light} text-sm mt-4">✓ Thanks for subscribing!</p>
         )}}
       </div>
     </section>
@@ -206,7 +206,7 @@ function Subscribe() {{
 
 function App() {{
   return (
-    <div class="bg-neutral-950">
+    <div className="bg-neutral-950">
       <Header />
       <FeaturedPost />
       <PostsList />

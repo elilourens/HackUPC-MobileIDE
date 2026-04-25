@@ -74,21 +74,21 @@ def render(spec: dict) -> dict[str, str]:
     integrations_html = ""
     for integration in integrations[:6]:
         integrations_html += f"""
-    <div class="flex items-center justify-center p-6 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors bg-neutral-900 bg-opacity-30">
-      <p class="text-neutral-300 font-medium">{integration}</p>
+    <div className="flex items-center justify-center p-6 rounded-lg border border-neutral-800 hover:border-neutral-700 transition-colors bg-neutral-900 bg-opacity-30">
+      <p className="text-neutral-300 font-medium">{integration}</p>
     </div>"""
 
     app_jsx = f'''function Hero() {{
   return (
-    <section class="min-h-screen bg-neutral-950 flex items-center justify-center px-6 py-32">
-      <div class="max-w-6xl mx-auto">
-        <div class="text-center mb-12">
-          <p class="text-{accent_light} text-sm font-semibold uppercase tracking-widest mb-4">{tool_name}</p>
-          <h1 class="text-6xl md:text-7xl font-bold tracking-tight text-neutral-50 mb-6">{hero_headline}</h1>
-          <p class="text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed mb-8">{hero_subheadline}</p>
-          <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <button class="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors">{primary_cta}</button>
-            <button class="border border-neutral-700 hover:border-neutral-600 text-neutral-50 font-semibold px-8 py-3 rounded-lg transition-colors">{secondary_cta}</button>
+    <section className="min-h-screen bg-neutral-950 flex items-center justify-center px-6 py-32">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-12">
+          <p className="text-{accent_light} text-sm font-semibold uppercase tracking-widest mb-4">{tool_name}</p>
+          <h1 className="text-6xl md:text-7xl font-bold tracking-tight text-neutral-50 mb-6">{hero_headline}</h1>
+          <p className="text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed mb-8">{hero_subheadline}</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button className="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors">{primary_cta}</button>
+            <button className="border border-neutral-700 hover:border-neutral-600 text-neutral-50 font-semibold px-8 py-3 rounded-lg transition-colors">{secondary_cta}</button>
           </div>
         </div>
       </div>
@@ -98,23 +98,23 @@ def render(spec: dict) -> dict[str, str]:
 
 function DemoBlock() {{
   return (
-    <section class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-4xl mx-auto">
-        <div class="rounded-2xl border border-neutral-800 bg-neutral-900 overflow-hidden shadow-2xl">
-          <div class="bg-neutral-800 border-b border-neutral-700 px-6 py-4 flex gap-2">
-            <div class="w-3 h-3 rounded-full bg-neutral-600"></div>
-            <div class="w-3 h-3 rounded-full bg-neutral-600"></div>
-            <div class="w-3 h-3 rounded-full bg-neutral-600"></div>
+    <section className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-4xl mx-auto">
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900 overflow-hidden shadow-2xl">
+          <div className="bg-neutral-800 border-b border-neutral-700 px-6 py-4 flex gap-2">
+            <div className="w-3 h-3 rounded-full bg-neutral-600"></div>
+            <div className="w-3 h-3 rounded-full bg-neutral-600"></div>
+            <div className="w-3 h-3 rounded-full bg-neutral-600"></div>
           </div>
-          <div class="p-8">
-            <p class="text-sm text-neutral-500 mb-4">Ask anything about your data</p>
-            <div class="bg-neutral-800 rounded-lg p-4 mb-6">
-              <p class="text-neutral-50 font-mono text-sm">> {demo_input_placeholder}</p>
+          <div className="p-8">
+            <p className="text-sm text-neutral-500 mb-4">Ask anything about your data</p>
+            <div className="bg-neutral-800 rounded-lg p-4 mb-6">
+              <p className="text-neutral-50 font-mono text-sm">> {demo_input_placeholder}</p>
             </div>
-            <div class="bg-{accent_light} bg-opacity-10 border border-{accent_light} border-opacity-30 rounded-lg p-4">
-              <p class="text-{accent_light} font-mono text-sm font-semibold">{demo_output_sample}</p>
+            <div className="bg-{accent_light} bg-opacity-10 border border-{accent_light} border-opacity-30 rounded-lg p-4">
+              <p className="text-{accent_light} font-mono text-sm font-semibold">{demo_output_sample}</p>
             </div>
-            <p class="text-neutral-500 text-xs mt-4">Response generated in 0.8s</p>
+            <p className="text-neutral-500 text-xs mt-4">Response generated in 0.8s</p>
           </div>
         </div>
       </div>
@@ -124,22 +124,22 @@ function DemoBlock() {{
 
 function BeforeAfter() {{
   return (
-    <section class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-6xl mx-auto">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div class="rounded-2xl border border-neutral-800 bg-neutral-900 bg-opacity-50 p-12 text-center">
-            <div class="w-16 h-16 rounded-full bg-neutral-800 flex items-center justify-center mx-auto mb-6">
-              <span class="text-2xl">⏱️</span>
+    <section className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="rounded-2xl border border-neutral-800 bg-neutral-900 bg-opacity-50 p-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-neutral-800 flex items-center justify-center mx-auto mb-6">
+              <span className="text-2xl">⏱️</span>
             </div>
-            <h3 class="text-2xl font-bold text-neutral-50 mb-4">{before_title}</h3>
-            <p class="text-neutral-400 leading-relaxed">{before_description}</p>
+            <h3 className="text-2xl font-bold text-neutral-50 mb-4">{before_title}</h3>
+            <p className="text-neutral-400 leading-relaxed">{before_description}</p>
           </div>
-          <div class="rounded-2xl border border-{accent_light} border-opacity-50 bg-{accent_light} bg-opacity-5 p-12 text-center">
-            <div class="w-16 h-16 rounded-full bg-{accent_light} bg-opacity-20 flex items-center justify-center mx-auto mb-6">
-              <span class="text-2xl">⚡</span>
+          <div className="rounded-2xl border border-{accent_light} border-opacity-50 bg-{accent_light} bg-opacity-5 p-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-{accent_light} bg-opacity-20 flex items-center justify-center mx-auto mb-6">
+              <span className="text-2xl">⚡</span>
             </div>
-            <h3 class="text-2xl font-bold text-neutral-50 mb-4">{after_title}</h3>
-            <p class="text-neutral-400 leading-relaxed">{after_description}</p>
+            <h3 className="text-2xl font-bold text-neutral-50 mb-4">{after_title}</h3>
+            <p className="text-neutral-400 leading-relaxed">{after_description}</p>
           </div>
         </div>
       </div>
@@ -149,13 +149,13 @@ function BeforeAfter() {{
 
 function Integrations() {{
   return (
-    <section class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-6xl mx-auto">
-        <div class="text-center mb-16">
-          <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-4">Works with your tools</h2>
-          <p class="text-lg text-neutral-400">Integrates seamlessly with platforms you already use</p>
+    <section className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-16">
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-4">Works with your tools</h2>
+          <p className="text-lg text-neutral-400">Integrates seamlessly with platforms you already use</p>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-6">{integrations_html}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">{integrations_html}
         </div>
       </div>
     </section>
@@ -164,10 +164,10 @@ function Integrations() {{
 
 function CTA() {{
   return (
-    <section class="py-24 bg-neutral-900 px-6">
-      <div class="max-w-4xl mx-auto text-center">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-6">Ready to transform your data?</h2>
-        <button class="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-4 rounded-lg transition-colors text-lg">{primary_cta}</button>
+    <section className="py-24 bg-neutral-900 px-6">
+      <div className="max-w-4xl mx-auto text-center">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-6">Ready to transform your data?</h2>
+        <button className="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-4 rounded-lg transition-colors text-lg">{primary_cta}</button>
       </div>
     </section>
   );
@@ -175,7 +175,7 @@ function CTA() {{
 
 function App() {{
   return (
-    <div class="bg-neutral-950">
+    <div className="bg-neutral-950">
       <Hero />
       <DemoBlock />
       <BeforeAfter />

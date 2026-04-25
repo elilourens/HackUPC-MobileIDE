@@ -71,17 +71,17 @@ def render(spec: dict) -> dict[str, str]:
     menu_html = ""
     for section in menu_sections[:3]:
         menu_html += f"""
-    <div class="mb-12">
-      <h3 class="text-3xl font-bold text-neutral-50 mb-8 pb-4 border-b border-neutral-800">{section.get('name', 'Section')}</h3>
-      <div class="space-y-8">"""
+    <div className="mb-12">
+      <h3 className="text-3xl font-bold text-neutral-50 mb-8 pb-4 border-b border-neutral-800">{section.get('name', 'Section')}</h3>
+      <div className="space-y-8">"""
         for item in section.get("items", [])[:3]:
             menu_html += f"""
         <div>
-          <div class="flex justify-between items-start mb-2">
-            <h4 class="text-xl font-semibold text-neutral-50">{item.get('name', 'Dish')}</h4>
-            <span class="text-{accent_light} font-semibold">{item.get('price', '')}</span>
+          <div className="flex justify-between items-start mb-2">
+            <h4 className="text-xl font-semibold text-neutral-50">{item.get('name', 'Dish')}</h4>
+            <span className="text-{accent_light} font-semibold">{item.get('price', '')}</span>
           </div>
-          <p class="text-neutral-400">{item.get('description', '')}</p>
+          <p className="text-neutral-400">{item.get('description', '')}</p>
         </div>"""
         menu_html += """
       </div>
@@ -89,13 +89,13 @@ def render(spec: dict) -> dict[str, str]:
 
     app_jsx = f'''function Header() {{
   return (
-    <header class="sticky top-0 bg-neutral-950 bg-opacity-95 border-b border-neutral-800 px-6 py-4 z-50">
-      <div class="max-w-6xl mx-auto flex justify-between items-center">
+    <header className="sticky top-0 bg-neutral-950 bg-opacity-95 border-b border-neutral-800 px-6 py-4 z-50">
+      <div className="max-w-6xl mx-auto flex justify-between items-center">
         <div>
-          <h1 class="text-2xl font-bold text-neutral-50">{restaurant_name}</h1>
-          <p class="text-{accent_light} text-sm">{cuisine}</p>
+          <h1 className="text-2xl font-bold text-neutral-50">{restaurant_name}</h1>
+          <p className="text-{accent_light} text-sm">{cuisine}</p>
         </div>
-        <a href="#reserve" class="border border-{accent_light} text-{accent_light} px-6 py-2 rounded-lg hover:bg-{accent_light} hover:text-neutral-950 transition-colors font-semibold">Reserve</a>
+        <a href="#reserve" className="border border-{accent_light} text-{accent_light} px-6 py-2 rounded-lg hover:bg-{accent_light} hover:text-neutral-950 transition-colors font-semibold">Reserve</a>
       </div>
     </header>
   );
@@ -103,13 +103,13 @@ def render(spec: dict) -> dict[str, str]:
 
 function Hero() {{
   return (
-    <section class="relative min-h-screen flex items-center justify-center overflow-hidden">
-      <img src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1600&h=900&fit=crop&auto=format&q=80" alt="Restaurant" class="absolute inset-0 w-full h-full object-cover" />
-      <div class="absolute inset-0 bg-neutral-950 bg-opacity-60"></div>
-      <div class="relative z-10 text-center px-6">
-        <h2 class="text-6xl md:text-7xl font-bold tracking-tight text-neutral-50 mb-4">{restaurant_name}</h2>
-        <p class="text-2xl text-neutral-300 mb-8">{tagline}</p>
-        <a href="#menu" class="inline-block bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors">Explore menu</a>
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      <img src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1600&h=900&fit=crop&auto=format&q=80" alt="Restaurant" className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-neutral-950 bg-opacity-60"></div>
+      <div className="relative z-10 text-center px-6">
+        <h2 className="text-6xl md:text-7xl font-bold tracking-tight text-neutral-50 mb-4">{restaurant_name}</h2>
+        <p className="text-2xl text-neutral-300 mb-8">{tagline}</p>
+        <a href="#menu" className="inline-block bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-3 rounded-lg transition-colors">Explore menu</a>
       </div>
     </section>
   );
@@ -117,10 +117,10 @@ function Hero() {{
 
 function Menu() {{
   return (
-    <section id="menu" class="py-32 bg-neutral-950 px-6">
-      <div class="max-w-4xl mx-auto">
-        <h2 class="text-5xl font-bold text-neutral-50 mb-6 text-center">Menu</h2>
-        <p class="text-center text-neutral-400 mb-16">Seasonally inspired dishes made with the finest local ingredients</p>
+    <section id="menu" className="py-32 bg-neutral-950 px-6">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-5xl font-bold text-neutral-50 mb-6 text-center">Menu</h2>
+        <p className="text-center text-neutral-400 mb-16">Seasonally inspired dishes made with the finest local ingredients</p>
         {menu_html}
       </div>
     </section>
@@ -129,16 +129,16 @@ function Menu() {{
 
 function Info() {{
   return (
-    <section class="py-24 bg-neutral-900 px-6">
-      <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
+    <section className="py-24 bg-neutral-900 px-6">
+      <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
         <div>
-          <h3 class="text-2xl font-bold text-neutral-50 mb-6">Hours</h3>
-          <p class="text-neutral-400 leading-relaxed whitespace-pre-line">{hours}</p>
+          <h3 className="text-2xl font-bold text-neutral-50 mb-6">Hours</h3>
+          <p className="text-neutral-400 leading-relaxed whitespace-pre-line">{hours}</p>
         </div>
         <div>
-          <h3 class="text-2xl font-bold text-neutral-50 mb-6">Location</h3>
-          <p class="text-neutral-300 mb-3">{address}</p>
-          <p class="text-{accent_light} font-semibold">{phone}</p>
+          <h3 className="text-2xl font-bold text-neutral-50 mb-6">Location</h3>
+          <p className="text-neutral-300 mb-3">{address}</p>
+          <p className="text-{accent_light} font-semibold">{phone}</p>
         </div>
       </div>
     </section>
@@ -156,15 +156,15 @@ function Reservation() {{
   }};
 
   return (
-    <section id="reserve" class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-2xl mx-auto text-center">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-6">{reservation_headline}</h2>
-        <form onSubmit={{handleSubmit}} class="space-y-4">
+    <section id="reserve" className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-2xl mx-auto text-center">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-6">{reservation_headline}</h2>
+        <form onSubmit={{handleSubmit}} className="space-y-4">
           <input
             type="text"
             placeholder="Your name"
             required
-            class="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:border-{accent_light}"
+            className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:border-{accent_light}"
           />
           <input
             type="email"
@@ -172,14 +172,14 @@ function Reservation() {{
             value={{email}}
             onChange={{(e) => setEmail(e.target.value)}}
             required
-            class="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:border-{accent_light}"
+            className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 placeholder-neutral-500 focus:outline-none focus:border-{accent_light}"
           />
           <input
             type="date"
             required
-            class="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 focus:outline-none focus:border-{accent_light}"
+            className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 focus:outline-none focus:border-{accent_light}"
           />
-          <select required class="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 focus:outline-none focus:border-{accent_light}">
+          <select required className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-6 py-3 text-neutral-50 focus:outline-none focus:border-{accent_light}">
             <option value="">Select party size</option>
             <option value="1">1 guest</option>
             <option value="2">2 guests</option>
@@ -187,12 +187,12 @@ function Reservation() {{
             <option value="4">4 guests</option>
             <option value="5">5+ guests</option>
           </select>
-          <button type="submit" class="w-full bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold py-3 rounded-lg transition-colors">
+          <button type="submit" className="w-full bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold py-3 rounded-lg transition-colors">
             Request reservation
           </button>
         </form>
         {{submitted && (
-          <div class="mt-6 bg-{accent_light} bg-opacity-10 border border-{accent_light} rounded-lg p-4 text-{accent_light}">
+          <div className="mt-6 bg-{accent_light} bg-opacity-10 border border-{accent_light} rounded-lg p-4 text-{accent_light}">
             ✓ Thank you! We'll confirm your reservation shortly.
           </div>
         )}}
@@ -203,9 +203,9 @@ function Reservation() {{
 
 function Footer() {{
   return (
-    <footer class="py-12 bg-neutral-900 border-t border-neutral-800 px-6">
-      <div class="max-w-6xl mx-auto text-center">
-        <p class="text-neutral-500">Follow us on Instagram @{restaurant_name.lower().replace(' ', '')}</p>
+    <footer className="py-12 bg-neutral-900 border-t border-neutral-800 px-6">
+      <div className="max-w-6xl mx-auto text-center">
+        <p className="text-neutral-500">Follow us on Instagram @{restaurant_name.lower().replace(' ', '')}</p>
       </div>
     </footer>
   );
@@ -213,7 +213,7 @@ function Footer() {{
 
 function App() {{
   return (
-    <div class="bg-neutral-950">
+    <div className="bg-neutral-950">
       <Header />
       <Hero />
       <Menu />

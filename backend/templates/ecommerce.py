@@ -65,13 +65,13 @@ def render(spec: dict) -> dict[str, str]:
     features_html = ""
     for feat in features[:4]:
         features_html += f"""
-    <div class="flex gap-4">
-      <div class="w-12 h-12 rounded-lg bg-{accent_light} bg-opacity-10 flex items-center justify-center flex-shrink-0">
-        <span class="text-{accent_light} font-bold">✓</span>
+    <div className="flex gap-4">
+      <div className="w-12 h-12 rounded-lg bg-{accent_light} bg-opacity-10 flex items-center justify-center flex-shrink-0">
+        <span className="text-{accent_light} font-bold">✓</span>
       </div>
       <div>
-        <h3 class="text-lg font-semibold text-neutral-50 mb-1">{feat.get('name', 'Feature')}</h3>
-        <p class="text-neutral-400">{feat.get('description', '')}</p>
+        <h3 className="text-lg font-semibold text-neutral-50 mb-1">{feat.get('name', 'Feature')}</h3>
+        <p className="text-neutral-400">{feat.get('description', '')}</p>
       </div>
     </div>"""
 
@@ -79,8 +79,8 @@ def render(spec: dict) -> dict[str, str]:
     gallery_html = ""
     for idx, img_id in enumerate(gallery_images):
         gallery_html += f"""
-    <div class="rounded-xl overflow-hidden border border-neutral-800">
-      <img src="https://images.unsplash.com/photo-{img_id}?w=600&h=500&fit=crop&auto=format&q=80" alt="Product view {idx + 1}" class="w-full h-auto object-cover" />
+    <div className="rounded-xl overflow-hidden border border-neutral-800">
+      <img src="https://images.unsplash.com/photo-{img_id}?w=600&h=500&fit=crop&auto=format&q=80" alt="Product view {idx + 1}" className="w-full h-auto object-cover" />
     </div>"""
 
     # Build reviews HTML
@@ -88,18 +88,18 @@ def render(spec: dict) -> dict[str, str]:
     for review in reviews[:3]:
         rating = "★" * review.get("rating", 5)
         reviews_html += f"""
-    <div class="rounded-lg border border-neutral-800 p-6 bg-neutral-900 bg-opacity-30">
-      <div class="text-{accent_light} font-bold mb-3">{rating}</div>
-      <p class="text-neutral-300 mb-4">"{review.get('text', '')}"</p>
-      <p class="text-neutral-500 text-sm">— {review.get('author', 'Customer')}</p>
+    <div className="rounded-lg border border-neutral-800 p-6 bg-neutral-900 bg-opacity-30">
+      <div className="text-{accent_light} font-bold mb-3">{rating}</div>
+      <p className="text-neutral-300 mb-4">"{review.get('text', '')}"</p>
+      <p className="text-neutral-500 text-sm">— {review.get('author', 'Customer')}</p>
     </div>"""
 
     app_jsx = f'''function Header() {{
   return (
-    <header class="sticky top-0 bg-neutral-950 bg-opacity-95 border-b border-neutral-800 px-6 py-4 z-50">
-      <div class="max-w-6xl mx-auto flex justify-between items-center">
-        <h1 class="text-xl font-bold text-neutral-50">{product_name}</h1>
-        <button class="border border-neutral-700 hover:border-{accent_light} text-neutral-50 px-6 py-2 rounded-lg transition-colors">Cart</button>
+    <header className="sticky top-0 bg-neutral-950 bg-opacity-95 border-b border-neutral-800 px-6 py-4 z-50">
+      <div className="max-w-6xl mx-auto flex justify-between items-center">
+        <h1 className="text-xl font-bold text-neutral-50">{product_name}</h1>
+        <button className="border border-neutral-700 hover:border-{accent_light} text-neutral-50 px-6 py-2 rounded-lg transition-colors">Cart</button>
       </div>
     </header>
   );
@@ -107,19 +107,19 @@ def render(spec: dict) -> dict[str, str]:
 
 function Hero() {{
   return (
-    <section class="min-h-screen bg-neutral-950 flex items-center justify-center px-6 py-32">
-      <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-        <div class="rounded-2xl overflow-hidden border border-neutral-800">
-          <img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop&auto=format&q=80" alt="{product_name}" class="w-full h-auto" />
+    <section className="min-h-screen bg-neutral-950 flex items-center justify-center px-6 py-32">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div className="rounded-2xl overflow-hidden border border-neutral-800">
+          <img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&h=800&fit=crop&auto=format&q=80" alt="{product_name}" className="w-full h-auto" />
         </div>
         <div>
-          <h1 class="text-5xl md:text-6xl font-bold tracking-tight text-neutral-50 mb-4">{headline}</h1>
-          <p class="text-xl text-neutral-400 leading-relaxed mb-8">{description}</p>
-          <div class="mb-8">
-            <span class="text-4xl font-bold text-neutral-50">{price}</span>
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-neutral-50 mb-4">{headline}</h1>
+          <p className="text-xl text-neutral-400 leading-relaxed mb-8">{description}</p>
+          <div className="mb-8">
+            <span className="text-4xl font-bold text-neutral-50">{price}</span>
           </div>
-          <button class="w-full bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold py-4 rounded-lg transition-colors mb-4 text-lg">{primary_cta}</button>
-          <button class="w-full border border-neutral-700 hover:border-{accent_light} text-neutral-50 font-semibold py-4 rounded-lg transition-colors">View details</button>
+          <button className="w-full bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold py-4 rounded-lg transition-colors mb-4 text-lg">{primary_cta}</button>
+          <button className="w-full border border-neutral-700 hover:border-{accent_light} text-neutral-50 font-semibold py-4 rounded-lg transition-colors">View details</button>
         </div>
       </div>
     </section>
@@ -128,10 +128,10 @@ function Hero() {{
 
 function Features() {{
   return (
-    <section class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-4xl mx-auto">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-16">Why you'll love it</h2>
-        <div class="space-y-8">{features_html}
+    <section className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-16">Why you'll love it</h2>
+        <div className="space-y-8">{features_html}
         </div>
       </div>
     </section>
@@ -140,10 +140,10 @@ function Features() {{
 
 function Gallery() {{
   return (
-    <section class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-6xl mx-auto">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-12">Product gallery</h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">{gallery_html}
+    <section className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-6xl mx-auto">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-12">Product gallery</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">{gallery_html}
         </div>
       </div>
     </section>
@@ -152,10 +152,10 @@ function Gallery() {{
 
 function Reviews() {{
   return (
-    <section class="py-24 bg-neutral-950 px-6">
-      <div class="max-w-4xl mx-auto">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-12">Loved by customers</h2>
-        <div class="space-y-6">{reviews_html}
+    <section className="py-24 bg-neutral-950 px-6">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-12">Loved by customers</h2>
+        <div className="space-y-6">{reviews_html}
         </div>
       </div>
     </section>
@@ -164,10 +164,10 @@ function Reviews() {{
 
 function CTA() {{
   return (
-    <section class="py-24 bg-neutral-900 px-6">
-      <div class="max-w-4xl mx-auto text-center">
-        <h2 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-8">Ready to upgrade?</h2>
-        <button class="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-4 rounded-lg transition-colors text-lg">{primary_cta}</button>
+    <section className="py-24 bg-neutral-900 px-6">
+      <div className="max-w-4xl mx-auto text-center">
+        <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-neutral-50 mb-8">Ready to upgrade?</h2>
+        <button className="bg-{accent_light} hover:bg-{accent_dark} text-neutral-950 font-semibold px-8 py-4 rounded-lg transition-colors text-lg">{primary_cta}</button>
       </div>
     </section>
   );
@@ -175,7 +175,7 @@ function CTA() {{
 
 function App() {{
   return (
-    <div class="bg-neutral-950">
+    <div className="bg-neutral-950">
       <Header />
       <Hero />
       <Features />
