@@ -1,0 +1,23 @@
+<idea-plugin>
+    <id>com.hackupc.mobilide</id>
+    <name>MobilIDE</name>
+    <vendor>HackUPC</vendor>
+    <description>MobilIDE — live sync between iOS AR editor and IntelliJ</description>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+            id="MobilIDE"
+            secondary="false"
+            anchor="right"
+            factoryClass="com.hackupc.mobilide.MobilIDEToolWindowFactory"
+            icon="/icons/toolwindow.svg"
+        />
+        <projectService serviceImplementation="com.hackupc.mobilide.SyncService"/>
+    </extensions>
+
+    <applicationListeners>
+        <listener
+            class="com.hackupc.mobilide.FileSaveListener"
+            topic="com.intellij.openapi.fileEditor.FileDocumentManagerListener"/>
+    </applicationListeners>
+</idea-plugin>
