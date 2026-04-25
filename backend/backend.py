@@ -126,8 +126,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Local dev keeps generated audio next to the package; Vercel functions
+# only have a writable /tmp, so fall back there if mkdir hits a read-only
+# fs. Either way the StaticFiles mount points at the writable copy.
 generated_dir = Path(__file__).resolve().parent / "aether_voice" / "generated"
-generated_dir.mkdir(parents=True, exist_ok=True)
+try:
+    generated_dir.mkdir(parents=True, exist_ok=True)
+except OSError:
+    generated_dir = Path("/tmp/aether_generated")
+    generated_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/generated", StaticFiles(directory=str(generated_dir)), name="generated")
 
 
