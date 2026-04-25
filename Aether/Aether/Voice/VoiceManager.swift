@@ -31,6 +31,10 @@ enum VoiceCommand: Equatable {
     /// (ARSessionManager) decides whether this is a fresh generation or a
     /// modification based on whether currentCode is empty.
     case codegen(String)
+    /// User said a wake phrase ("Hey Junie") with no body. ARSessionManager
+    /// should respond with a brief acknowledgement so the user knows Junie is
+    /// armed for the next utterance.
+    case armWake
     /// User said "yes / confirm / go ahead" — proceed with the pending Junie plan.
     case confirm
     /// User said "no / cancel / stop" — discard the pending Junie plan.
@@ -60,6 +64,14 @@ final class VoiceManager: ObservableObject {
     /// flash a "listening" indicator and by the parser to gate command firing.
     @Published var isPushToTalkActive: Bool = false
     @Published var lastUtterance: String = ""
+    /// Two-step intent gate. The first utterance that doesn't match a known
+    /// command is silently dropped UNLESS the user opened it with a wake phrase
+    /// (e.g. "Hey Junie"). Wake phrase → `intentArmed = true`; then the next
+    /// utterance is treated as a build prompt. Auto-disarms after a timeout.
+    /// Why: random user speech kept being interpreted as "build me a website".
+    @Published var intentArmed: Bool = false
+    private var armTimeoutItem: DispatchWorkItem?
+    private static let armTimeoutSeconds: TimeInterval = 25
 
     private let recognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private let audioEngine = AVAudioEngine()
@@ -234,8 +246,24 @@ final class VoiceManager: ObservableObject {
                 // Clear the live transcript so the HUD doesn't keep showing it.
                 self.transcript = ""
 
-                if !final.isEmpty, let command = VoiceManager.parse(final) {
+                // Push-to-talk = the user explicitly held the mic. Treat that
+                // as the wake-gate being armed — they pressed a physical
+                // button, that IS the intent. Otherwise random utterances
+                // like "create a website" never made it to codegen because
+                // the wake-gate required "hey junie" first.
+                if !final.isEmpty,
+                   let command = VoiceManager.parse(final, armed: true) {
                     self.commandFiredThisChain = true
+                    // Manage the wake-gate state in lockstep with the parse:
+                    // .armWake → arm + start timeout. .codegen → consume the arm.
+                    switch command {
+                    case .armWake:
+                        self.armIntent()
+                    case .codegen:
+                        self.disarmIntent()
+                    default:
+                        break
+                    }
                     self.onCommand?(command)
                 }
             }
@@ -255,6 +283,30 @@ final class VoiceManager: ObservableObject {
         request?.endAudio()
         request = nil
         transcript = ""
+    }
+
+    // MARK: - Wake-gate state
+
+    /// Mark the gate armed for the next utterance and (re)start the auto-disarm
+    /// timer. Idempotent — back-to-back wake phrases just refresh the timeout.
+    func armIntent() {
+        intentArmed = true
+        armTimeoutItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.intentArmed = false
+            }
+        }
+        armTimeoutItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.armTimeoutSeconds, execute: item)
+    }
+
+    /// Drop the armed flag — called after a codegen fires (the arm has been
+    /// "spent") or by the dispatcher when a plan is cancelled.
+    func disarmIntent() {
+        intentArmed = false
+        armTimeoutItem?.cancel()
+        armTimeoutItem = nil
     }
 
     // MARK: - Command parsing
@@ -283,12 +335,67 @@ final class VoiceManager: ObservableObject {
         (["terry"],                                                 .terry,         .showTerry),
     ]
 
+    /// Wake phrases that arm the intent gate. Order matters — longest first so
+    /// "hey junie" matches before "junie".
+    private static let wakePhrases: [String] = [
+        "hey junie", "ok junie", "okay junie", "yo junie",
+        "hey jarvis", "ok jarvis",
+        "junie"
+    ]
+
+    /// Strip a leading wake phrase. Returns (matched, remainder-as-original-case).
+    /// `remainder` keeps original casing so we don't lowercase user content
+    /// before sending it to the LLM.
+    private static func stripWake(rawText: String, lower: String) -> (matched: Bool, remainderRaw: String, remainderLower: String) {
+        for phrase in wakePhrases {
+            if lower == phrase {
+                return (true, "", "")
+            }
+            // Trailing comma / space after the wake word — both common.
+            if lower.hasPrefix(phrase + " ") || lower.hasPrefix(phrase + ",") {
+                let dropCount = phrase.count
+                let lowerRest = lower.dropFirst(dropCount)
+                    .drop { $0 == " " || $0 == "," }
+                let rawRest = rawText.dropFirst(dropCount)
+                    .drop { $0 == " " || $0 == "," }
+                return (true,
+                        String(rawRest).trimmingCharacters(in: .whitespacesAndNewlines),
+                        String(lowerRest).trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+        }
+        return (false,
+                rawText.trimmingCharacters(in: .whitespacesAndNewlines),
+                lower)
+    }
+
     /// Token-based parser. Finds the LAST target keyword in the utterance, then walks
     /// backward up to 6 words to find the most recent action keyword. This keeps
     /// "show preview hide preview" resolving to `.hide(.preview)` (the latest action+target
     /// pair wins) instead of always matching `.contains("show")` first.
-    static func parse(_ rawText: String) -> VoiceCommand? {
-        let lower = rawText.lowercased()
+    ///
+    /// `armed` is the wake-gate state. When true, the codegen catch-all fires
+    /// for any ≥3-letter utterance; when false, only utterances opened with a
+    /// wake phrase ("Hey Junie …") are allowed to fire codegen.
+    static func parse(_ rawText: String, armed: Bool = false) -> VoiceCommand? {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+        guard !lower.isEmpty else { return nil }
+
+        // Wake-phrase detection runs first so the rest of the parser sees only
+        // the user's intent, not "hey junie " noise.
+        let (wakeMatched, strippedRaw, strippedLower) = stripWake(rawText: trimmed, lower: lower)
+        if wakeMatched && strippedLower.isEmpty {
+            // Pure wake phrase, no body — arm the gate and let the dispatcher ack.
+            return .armWake
+        }
+        // From here on use the stripped text for parsing. Codegen-fallback gate
+        // becomes (armed || wakeMatched).
+        return parseStripped(rawText: strippedRaw, lower: strippedLower,
+                             armed: armed, wakeMatched: wakeMatched)
+    }
+
+    private static func parseStripped(rawText: String, lower: String,
+                                      armed: Bool, wakeMatched: Bool) -> VoiceCommand? {
         guard !lower.isEmpty else { return nil }
 
         // ----- Phase 2 single-purpose commands (must run BEFORE show/hide so e.g.
@@ -414,7 +521,8 @@ final class VoiceManager: ObservableObject {
         guard let ti = targetIndex else {
             // No target word — try wake-word question, then fall through to codegen.
             if let q = parseWakeWordQuestion(rawText: rawText, lower: lower) { return q }
-            return codegenFallback(rawText: rawText, lower: lower)
+            return codegenFallback(rawText: rawText, lower: lower,
+                                   armed: armed, wakeMatched: wakeMatched)
         }
 
         // 2) Look back from ti-1 up to 6 words for the most recent action keyword.
@@ -441,7 +549,8 @@ final class VoiceManager: ObservableObject {
 
         guard let action = action else {
             if let q = parseWakeWordQuestion(rawText: rawText, lower: lower) { return q }
-            return codegenFallback(rawText: rawText, lower: lower)
+            return codegenFallback(rawText: rawText, lower: lower,
+                                   armed: armed, wakeMatched: wakeMatched)
         }
 
         switch action {
@@ -467,7 +576,14 @@ final class VoiceManager: ObservableObject {
     /// Phase 2 catch-all. Any utterance with at least 3 letters that didn't match a
     /// known command is treated as a Gemini codegen / modify request. Below 3 letters
     /// is almost always a misfire ("uh", "ok", "no") and we drop it.
-    private static func codegenFallback(rawText: String, lower: String) -> VoiceCommand? {
+    ///
+    /// Gated by the wake-phrase rule: returns nil unless the user either opened
+    /// this utterance with a wake phrase ("Hey Junie …") or had previously
+    /// armed the gate with a standalone wake phrase. Stops random speech from
+    /// being misread as "build me a website".
+    private static func codegenFallback(rawText: String, lower: String,
+                                        armed: Bool, wakeMatched: Bool) -> VoiceCommand? {
+        guard armed || wakeMatched else { return nil }
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         let letters = trimmed.unicodeScalars.filter { CharacterSet.letters.contains($0) }
         guard letters.count >= 3 else { return nil }

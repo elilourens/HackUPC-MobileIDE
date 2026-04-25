@@ -139,18 +139,34 @@ struct WorkspaceHUD: View {
                 .allowsHitTesting(true)
             }
 
-            // Junie execution-plan overlay — appears the moment a plan lands and
-            // dismisses on confirm/cancel. Voice commands ("yes" / "no") flow
-            // through ARSessionManager.handleVoiceCommand, which mutates the
-            // pendingPlan published state, so the overlay reacts automatically.
+            // Junie execution-plan overlay — a proper AR pop-out card. Pops
+            // toward the user with a scale-in animation, corner brackets,
+            // sweeping scan line. Voice commands ("yes" / "no") flow through
+            // ARSessionManager.handleVoiceCommand, which mutates pendingPlan,
+            // so the overlay reacts automatically.
             if let plan = sessionManager.session.pendingPlan {
                 PlanHUDOverlay(
                     plan: plan,
                     onConfirm: { sessionManager.confirmPendingPlan() },
-                    onCancel:  { sessionManager.cancelPendingPlan() }
+                    onCancel:  { sessionManager.cancelPendingPlan() },
+                    style: .full
                 )
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
                 .zIndex(60)
+            }
+
+            // "Armed — say what to build" hint bar — only when the wake-word gate
+            // is set and no plan is already pending. Tells the user JARVIS heard
+            // them and is waiting for the actual prompt.
+            if voiceManager.intentArmed && sessionManager.session.pendingPlan == nil {
+                VStack(spacing: 0) {
+                    armedHintBar
+                        .padding(.top, 56)
+                    Spacer()
+                }
+                .transition(.opacity)
+                .zIndex(58)
+                .allowsHitTesting(false)
             }
 
             // Corner-resize handles for the currently selected panel.
@@ -180,6 +196,31 @@ struct WorkspaceHUD: View {
             }
         }
         .animation(.easeInOut(duration: 0.45), value: sessionManager.workspaceStarted)
+    }
+
+    /// Compact "ready for prompt" hint shown after the user says a wake phrase
+    /// (e.g. "Hey Junie") with no body. Holds until the user speaks again or the
+    /// arming times out in `VoiceManager`.
+    private var armedHintBar: some View {
+        HStack(spacing: 8) {
+            Image("JunieIcon")
+                .resizable().renderingMode(.original).aspectRatio(contentMode: .fit)
+                .frame(width: 14, height: 14)
+            Text("LISTENING · TELL JUNIE WHAT TO BUILD")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(1.4)
+                .foregroundColor(.white.opacity(0.92))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(
+            Capsule()
+                .fill(Color(red: 25/255, green: 27/255, blue: 30/255).opacity(0.86))
+                .overlay(
+                    Capsule().stroke(Color(red: 95/255, green: 184/255, blue: 101/255).opacity(0.55),
+                                     lineWidth: 1)
+                )
+        )
     }
 
     private var gestureLabel: String {
@@ -322,12 +363,11 @@ private struct LetsStartOverlay: View {
     @State private var pulse: CGFloat = 0
 
     var body: some View {
-        ZStack {
-            // Transparent full-screen catcher so taps anywhere wake the workspace.
-            Color.black.opacity(0.001)
-                .contentShape(Rectangle())
-                .onTapGesture { onTap() }
-
+        // Wrap the whole overlay in a Button so taps on ANY visual element
+        // (the rings, the wordmark, the "LET'S START" pill) actually fire
+        // `onTap`. The previous .onTapGesture on a transparent backing layer
+        // was getting absorbed by the visible Text views in front of it.
+        Button(action: onTap) {
             VStack(spacing: 22) {
                 // Aether glyph: concentric cyan rings with a hex center marker.
                 ZStack {
@@ -376,7 +416,10 @@ private struct LetsStartOverlay: View {
                     .foregroundColor(.white.opacity(0.5))
             }
             .padding(.horizontal, 40)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .onAppear {
             withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
                 pulse = 1.0

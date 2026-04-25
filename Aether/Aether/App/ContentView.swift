@@ -9,7 +9,11 @@ enum AppPhase {
 
 struct ContentView: View {
     @ObservedObject var session: ProjectSession
-    @State private var phase: AppPhase = (UserDefaults.standard.bool(forKey: "aether.welcome.seen") ? .phoneIDE : .welcome)
+    // AR-first flow: open straight into placement so the user picks a real
+    // surface for the workspace before doing anything else. From there
+    // "Let's Start" boots the AR workspace; the Phone pill swaps into the
+    // IDE; the AR pill in the IDE swaps back. Welcome screen is bypassed.
+    @State private var phase: AppPhase = .placement
     @StateObject private var sessionManager: ARSessionManager
     @StateObject private var voiceManager = VoiceManager()
     @State private var arPlacedOnce = false

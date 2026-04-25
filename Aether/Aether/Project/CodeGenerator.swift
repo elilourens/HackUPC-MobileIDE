@@ -53,6 +53,113 @@ final class CodeGenerator {
         post(systemPrompt: generateSystem, userPrompt: prompt, temperature: 0.7, completion: completion)
     }
 
+    // MARK: - Project-level (multi-file) JSON-mode codegen
+
+    /// Multi-file project system prompt. The model returns JSON shaped as
+    /// `{ files, primary, preview_html, stack }` so we can populate the IDE
+    /// project tree with a real React / Express / FastAPI structure AND keep
+    /// a self-contained `preview_html` that runs in WKWebView (Babel
+    /// standalone for JSX, or a generated docs page for backends).
+    private let generateProjectSystem = """
+    You are a senior full-stack engineer. The user is building a project on their phone — there is no terminal, no `npm install`, no Docker. They just want a runnable, tasteful, real project that they can also push to GitHub.
+
+    Decide the right stack from the prompt:
+    - "landing page", "marketing site", "portfolio", "dashboard", anything UI → react-vite
+    - "API", "backend", "server", "REST" → express
+    - "FastAPI", "python backend" → fastapi
+    - "blog", "static site" → html (single file)
+
+    Return JSON with exactly this shape (no markdown, no prose):
+    {
+      "stack": "react-vite" | "express" | "fastapi" | "html",
+      "primary": "<repo-relative path to open first>",
+      "files": { "<repo-relative path>": "<full file content>", ... },
+      "preview_html": "<self-contained HTML the WKWebView can render directly>"
+    }
+
+    REACT (react-vite) projects MUST include:
+      - package.json (with vite, react, react-dom in deps; "scripts": { "dev": "vite", "build": "vite build" })
+      - vite.config.js
+      - index.html (Vite root with #root and <script type="module" src="/src/main.jsx">)
+      - src/main.jsx (createRoot + import App from "./App.jsx")
+      - src/App.jsx (the actual UI — beautiful Tailwind-style design via inline classes or CSS modules)
+      - src/index.css
+      - src/App.css (optional)
+      - README.md (one-paragraph project description + how to run)
+    primary = "src/App.jsx".
+    preview_html = a SELF-CONTAINED page that loads React 18 + ReactDOM 18 + Babel standalone + Tailwind CDN, then INLINES the App component(s) inside <script type="text/babel"> and renders them into #root. The preview must work with NO file system / NO node — it's the only way the user sees the page.
+
+    EXPRESS (express) projects MUST include:
+      - package.json (with express, cors)
+      - server.js (app.listen(3000), example routes for /api/health and the user's domain)
+      - routes/ (one file per resource if applicable)
+      - .env.example
+      - README.md
+    primary = "server.js".
+    preview_html = a generated docs page listing the routes (no live server in WKWebView).
+
+    FASTAPI (fastapi) projects MUST include:
+      - main.py (FastAPI app + uvicorn entry)
+      - requirements.txt
+      - routers/ (if applicable)
+      - .env.example
+      - README.md
+    primary = "main.py".
+    preview_html = a generated docs page listing the endpoints.
+
+    HTML (html) projects: one index.html. primary = "index.html". preview_html = same as the file.
+
+    DESIGN RULES (UI projects):
+    - Use Google Fonts via <link>. DM Sans / Plus Jakarta Sans / Sora / Outfit / Manrope.
+    - 2–3 muted, professional colors. Dark theme by default (bg-neutral-950, cards bg-neutral-900). NO neon, NO rainbow.
+    - Generous spacing (p-8/p-12, gap-6, space-y-8, py-20).
+    - Components: rounded-2xl, soft shadows, clean borders.
+    - Real Unsplash photos when relevant: https://images.unsplash.com/photo-ID?w=800
+    - Vercel / Linear / Stripe-grade polish.
+
+    Return ONLY the JSON object. No markdown fences. No commentary.
+    """
+
+    /// JSON-mode generation that returns a full multi-file `BuildResult`.
+    func generateProject(prompt: String,
+                         completion: @escaping (Result<BackendClient.BuildResult, Error>) -> Void) {
+        postJSON(systemPrompt: generateProjectSystem, userPrompt: prompt,
+                 temperature: 0.7, completion: completion)
+    }
+
+    /// JSON-mode modification — sends the full project, asks the model for the
+    /// updated project. We also send an `element` hint when the user picked a
+    /// specific element in the AR preview, so single-element edits are scoped.
+    func modifyProject(files: [String: String], primary: String,
+                       prompt: String, selected: ElementInfo?,
+                       completion: @escaping (Result<BackendClient.BuildResult, Error>) -> Void) {
+        var system = generateProjectSystem + """
+
+
+        CONTEXT: This is a MODIFICATION of an existing project. Preserve the
+        existing stack, file layout, design language, and component structure.
+        Edit only what's necessary. Return the COMPLETE project (every file)
+        in the same JSON shape so the IDE can replace the project atomically.
+        """
+        if let sel = selected {
+            let descriptor = "<\(sel.tag.lowercased()) class=\"\(sel.className)\" id=\"\(sel.id)\">\(sel.text)</\(sel.tag.lowercased())>"
+            system += "\n\nThe user has selected this element to scope the change to: \(descriptor)."
+        }
+        // Embed current files as a serialized blob so the model has the
+        // existing source code to diff against.
+        let filesPayload = (try? JSONSerialization.data(withJSONObject: files))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        let userMessage = """
+        CURRENT PROJECT (primary = \(primary)):
+        \(filesPayload)
+
+        REQUESTED CHANGE:
+        \(prompt)
+        """
+        postJSON(systemPrompt: system, userPrompt: userMessage,
+                 temperature: 0.5, completion: completion)
+    }
+
     /// Modify existing HTML. If `selected` is non-nil, scope the change to that element.
     func modify(currentCode: String, prompt: String, selected: ElementInfo?, completion: @escaping (Result<String, Error>) -> Void) {
         let system: String
@@ -83,6 +190,63 @@ final class CodeGenerator {
     }
 
     // MARK: - Internals
+
+    /// JSON-mode wrapper around OpenAI chat completions for project-level
+    /// codegen. Forces `response_format: json_object` so the model can't slip
+    /// markdown or prose in front of the structured output.
+    private func postJSON(systemPrompt: String, userPrompt: String, temperature: Double,
+                          completion: @escaping (Result<BackendClient.BuildResult, Error>) -> Void) {
+        guard let url = URL(string: endpoint) else {
+            completion(.failure(URLError(.badURL))); return
+        }
+        var req = URLRequest(url: url, timeoutInterval: 120)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user",   "content": userPrompt]
+            ],
+            "temperature": temperature,
+            "response_format": ["type": "json_object"]
+        ]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            if let error = error {
+                completion(.failure(error)); return
+            }
+            guard let data = data else {
+                completion(.failure(URLError(.zeroByteResource))); return
+            }
+            if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                let bodyStr = String(data: data, encoding: .utf8) ?? "<no body>"
+                print("CodeGenerator(JSON) HTTP \(http.statusCode): \(bodyStr)")
+                completion(.failure(URLError(.badServerResponse))); return
+            }
+            do {
+                let outer = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let choices = outer?["choices"] as? [[String: Any]]
+                let message = choices?.first?["message"] as? [String: Any]
+                guard let content = message?["content"] as? String, !content.isEmpty,
+                      let inner = content.data(using: .utf8),
+                      let project = try JSONSerialization.jsonObject(with: inner) as? [String: Any]
+                else {
+                    completion(.failure(URLError(.cannotDecodeContentData))); return
+                }
+                if let result = BackendClient.decodeBuildResult(project) {
+                    DispatchQueue.main.async { completion(.success(result)) }
+                } else {
+                    completion(.failure(URLError(.cannotDecodeContentData)))
+                }
+            } catch {
+                completion(.failure(error))
+            }
+        }.resume()
+    }
 
     private func post(systemPrompt: String, userPrompt: String, temperature: Double, completion: @escaping (Result<String, Error>) -> Void) {
         guard let url = URL(string: endpoint) else {

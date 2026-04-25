@@ -68,10 +68,16 @@ final class PanelManager {
         let editorPanel = makePanel(kind: .editor, width: 0.56, height: 0.40, isDark: false)
         editorPanel.position = SIMD3<Float>(-0.32, 0.30, 0.20)
 
-        let terminalPanel = makePanel(kind: .terminal, width: 0.32, height: 0.16, isDark: true)
-        terminalPanel.position = SIMD3<Float>(0, 0.10, 0.42)
+        // Junie CLI terminal — small 0.50m strip centered between the editor
+        // and preview (above them), at the same z-depth so it doesn't curve
+        // toward or away from the user.
+        let terminalPanel = makePanel(kind: .terminal, width: 0.50, height: 0.10, isDark: true)
+        terminalPanel.position = SIMD3<Float>(0, 0.56, 0.20)
 
-        // Assistant bubble: a thin status bar high above the IDE+preview pair.
+        // Assistant bubble: kept as a hidden placeholder so existing
+        // `updateAssistant` calls stay no-op-safe, but it's never enabled
+        // and never added to the scene — the Junie CLI terminal above
+        // covers that real estate now.
         let assistantPanel = makePanel(kind: .assistant, width: 0.50, height: 0.08, isDark: false)
         assistantPanel.position = SIMD3<Float>(0, 0.58, 0.10)
 
@@ -121,7 +127,10 @@ final class PanelManager {
 
         anchor.addChild(editorPanel)
         anchor.addChild(terminalPanel)
-        anchor.addChild(assistantPanel)
+        // assistantPanel intentionally NOT added to the scene — its slot
+        // (the old "Listening..." bar) is now occupied by the Junie CLI
+        // terminal, and the bottom Junie panel in the phone IDE handles the
+        // chat-style assistant role.
         anchor.addChild(previewPanel)
         anchor.addChild(docsPanel)
         anchor.addChild(terryPanel)
@@ -497,13 +506,15 @@ final class PanelManager {
             editor.move(to: target, relativeTo: parent, duration: dur, timingFunction: .easeInOut)
         }
 
-        // Terminal: centered below the IDE/preview pair, pushed forward so it
-        // reads as a desk-level inspector rather than a wall panel.
+        // Junie CLI terminal: ride above the editor+preview pair, same
+        // z-depth so it doesn't curve forward. Replaces the old "Listening"
+        // assistant bar — the bottom Junie chat in the phone IDE handles
+        // chat, this surface is the live build log.
         if let terminal = panels[.terminal], let parent = terminal.parent {
             let target = Transform(
                 scale: SIMD3<Float>(1, 1, 1),
                 rotation: terminal.transform.rotation,
-                translation: SIMD3<Float>(0, 0.10, 0.42)
+                translation: SIMD3<Float>(0, 0.56, 0.20)
             )
             terminal.move(to: target, relativeTo: parent, duration: dur, timingFunction: .easeInOut)
         }

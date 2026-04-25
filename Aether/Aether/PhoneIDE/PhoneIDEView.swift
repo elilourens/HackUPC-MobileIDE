@@ -18,6 +18,8 @@ struct PhoneIDEView: View {
     @State private var newFileDraft: String = ""
     @State private var currentBranch: String = "main"
     @State private var showNotifications = false
+    @State private var showFindInProject = false
+    @State private var showDebugConsole = false
     @State private var editorRatio: CGFloat = 0.62   // editor takes ~62% by default when preview is split
     @State private var dragStartRatio: CGFloat = 0.62
 
@@ -31,6 +33,12 @@ struct PhoneIDEView: View {
     private let tabsHeight: CGFloat = 32
     private let statusHeight: CGFloat = 24
     private let iconStripWidth: CGFloat = 28
+    /// Real origin for the preview WebView so cross-origin script errors
+    /// expose their actual line/file in `window.onerror` instead of being
+    /// sanitized to the useless string "Script error.". `aether.preview`
+    /// is a dummy domain — it only needs to be a valid URL so WKWebView
+    /// stops treating the page as opaque-origin.
+    fileprivate static let previewBaseURL = URL(string: "https://aether.preview/")!
     @State private var selectedToolWindow: ToolWindow = .project
 
     enum ToolWindow: String, CaseIterable {
@@ -43,22 +51,32 @@ struct PhoneIDEView: View {
                 IJ.bgMain.ignoresSafeArea()
 
                 VStack(spacing: 0) {
+                    brandBar
                     toolbar
-                    HStack(spacing: 0) {
+                    HStack(alignment: .top, spacing: 0) {
                         leftIconStrip
                         Rectangle().fill(IJ.border).frame(width: 1)
                         VStack(spacing: 0) {
                             tabs
-                            splitArea(totalHeight: geo.size.height - toolbarHeight - tabsHeight - statusHeight - safeTopInset())
+                            splitAreaView
                         }
+                        // Without an explicit max width, SwiftUI lets the
+                        // editor / Junie subtree overflow past the right
+                        // edge on phones with notches, clipping the send
+                        // button etc. Constrain it to whatever the HStack
+                        // has left after the icon strip and divider.
+                        .frame(maxWidth: .infinity)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     statusBar
                 }
-                .ignoresSafeArea(edges: .bottom)
-
-                junieRightPanel(height: geo.size.height)
-                    .animation(.easeOut(duration: 0.22), value: showJunie)
-                    .ignoresSafeArea(edges: .vertical)
+                // Ignore the *container* vertical safe areas so the brand
+                // bar / toolbar / status bar paint their backgrounds to the
+                // screen edges. We deliberately do NOT pass the .keyboard
+                // region, otherwise the system stops nudging the layout up
+                // when the iOS keyboard rises and Junie's input gets buried
+                // under the keys.
+                .ignoresSafeArea(.container, edges: [.top, .bottom])
 
                 FileTreeSidebar(
                     session: session,
@@ -82,6 +100,12 @@ struct PhoneIDEView: View {
                 refreshRepo()
             })
         }
+        .sheet(isPresented: $showFindInProject) {
+            FindInProjectSheet(session: session, isShown: $showFindInProject)
+        }
+        .sheet(isPresented: $showDebugConsole) {
+            DebugConsoleSheet(session: session, isShown: $showDebugConsole)
+        }
         .onAppear {
             if session.openTabs.isEmpty {
                 if session.projectFiles[session.currentFile] == nil {
@@ -94,7 +118,10 @@ struct PhoneIDEView: View {
     // MARK: - Toolbar (WebStorm window header)
 
     private var toolbar: some View {
-        HStack(spacing: 8) {
+        // Tight spacing + padding so the AR pill on the far right doesn't
+        // get clipped on a stock 393pt-wide iPhone — every extra pt of
+        // padding costs us on the trailing edge.
+        HStack(spacing: 5) {
             // Hamburger
             Button(action: { withAnimation(.easeOut(duration: 0.22)) { sidebarShown.toggle() } }) {
                 Image(systemName: "line.3.horizontal")
@@ -103,15 +130,9 @@ struct PhoneIDEView: View {
                     .frame(width: 24, height: 24)
             }
 
-            // Project pill
-            HStack(spacing: 6) {
-                JBIcon(.tool("project"), size: 12)
-                Text(projectLabel)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(IJ.textPrimary)
-            }
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(RoundedRectangle(cornerRadius: 6).fill(IJ.bgEditor))
+            // (Project pill removed — the brand bar above already names the
+            // project, and this row was getting horizontally compressed and
+            // wrapping "my-app" into a 1-char-wide column.)
 
             // Branch widget — dropdown of stub branches
             Menu {
@@ -132,14 +153,29 @@ struct PhoneIDEView: View {
                 .background(RoundedRectangle(cornerRadius: 6).fill(IJ.bgEditor))
             }
 
-            // Run + debug widgets
-            Button(action: { /* run preview */ withAnimation(.easeOut(duration: 0.18)) { showPreview = true } }) {
+            // Run — toggles the live preview pane below the editor.
+            Button(action: {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    showPreview.toggle()
+                    if showPreview { showJunie = false }
+                }
+            }) {
                 JBIcon(.tool("run"), size: 13)
                     .frame(width: 22, height: 22)
             }
-            Button(action: { /* debug — no-op for hackathon */ }) {
-                JBIcon(.tool("debug"), size: 13)
-                    .frame(width: 22, height: 22)
+
+            // Debug — opens the Debug Console sheet showing every console.log /
+            // warn / error captured from the preview WebView via injected JS.
+            Button(action: { showDebugConsole = true }) {
+                ZStack(alignment: .topTrailing) {
+                    JBIcon(.tool("debug"), size: 13)
+                        .frame(width: 22, height: 22)
+                    if hasErrorsInConsole {
+                        Circle().fill(IJ.accentRed)
+                            .frame(width: 6, height: 6)
+                            .offset(x: -2, y: 2)
+                    }
+                }
             }
 
             // GitHub sync — tap = push, long-press = pull (JetBrains UX)
@@ -157,18 +193,25 @@ struct PhoneIDEView: View {
 
             Spacer()
 
-            // Search
-            Button(action: {}) {
+            // Search — opens "Find in Project" sheet that scans every file in
+            // session.projectFiles and jumps to the matching file on tap.
+            Button(action: { showFindInProject = true }) {
                 JBIcon(.tool("search"), size: 13)
                     .frame(width: 22, height: 22)
             }
-            // AI assistant — Junie sparkle
-            Button(action: { selectedToolWindow = .junie }) {
+
+            // AI assistant — Junie sparkle. Toggles the bottom Junie tool
+            // window so the toolbar mirrors the icon-strip behaviour.
+            Button(action: {
+                selectedToolWindow = .junie
+                withAnimation(.easeOut(duration: 0.22)) { showJunie.toggle() }
+            }) {
                 Image("JunieIcon")
                     .resizable()
                     .renderingMode(.original)
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 16)
+                    .frame(width: 14, height: 14)
+                    .frame(width: 22, height: 22)
             }
             // Notifications bell — JetBrains New UI right-side notification center
             Menu {
@@ -195,33 +238,97 @@ struct PhoneIDEView: View {
                 }
             }
 
-            // Avatar
-            ZStack {
-                Circle().fill(IJ.bgEditor)
-                Circle().stroke(IJ.border, lineWidth: 1)
-                Text("A").font(.system(size: 10, weight: .semibold)).foregroundColor(IJ.textPrimary)
+            // Account menu — JetBrains-style avatar dropdown. Shows GitHub
+            // status (connected repo or "Connect GitHub"), a settings shortcut,
+            // and a sign-out option that disconnects GitHub.
+            Menu {
+                Section("Account") {
+                    Text("Akshat · ArcReact")
+                }
+                Section("GitHub") {
+                    if session.isGitHubConnected {
+                        Text(session.gitHubRepo.isEmpty ? "Connected" : session.gitHubRepo)
+                        Button(role: .destructive) {
+                            session.isGitHubConnected = false
+                            session.gitHubToken = ""
+                            session.gitHubRepo = ""
+                        } label: {
+                            Label("Disconnect GitHub", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    } else {
+                        Button { showGitHubConnect = true } label: {
+                            Label("Connect GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+                        }
+                    }
+                }
+                Section {
+                    Button { showSettings = true } label: {
+                        Label("Settings…", systemImage: "gearshape")
+                    }
+                }
+            } label: {
+                ZStack {
+                    Circle().fill(IJ.bgEditor)
+                    Circle().stroke(IJ.border, lineWidth: 1)
+                    Text("A").font(.system(size: 10, weight: .semibold)).foregroundColor(IJ.textPrimary)
+                    if session.isGitHubConnected {
+                        Circle().fill(IJ.accentGreen)
+                            .frame(width: 6, height: 6)
+                            .offset(x: 8, y: -8)
+                    }
+                }
+                .frame(width: 22, height: 22)
             }
-            .frame(width: 22, height: 22)
 
-            // Settings
-            Button(action: { showSettings = true }) {
-                JBIcon(.tool("settings"), size: 13)
-                    .frame(width: 22, height: 22)
-            }
+            // (Settings button removed from toolbar — it's reachable from
+            // the avatar account menu, and dropping it here gives the AR
+            // pill room to breathe on a 393pt-wide iPhone.)
 
             // AR pill (kept — not in stock WebStorm but this is ArcReact)
             Button(action: onEnterAR) {
                 Text("AR")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 7)
                     .padding(.vertical, 4)
                     .background(RoundedRectangle(cornerRadius: 5).fill(IJ.accentBlue))
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.top, safeTopInset())
-        .frame(height: toolbarHeight + safeTopInset())
+        .padding(.horizontal, 6)
+        .frame(height: toolbarHeight)
+        .background(IJ.bgEditor)
+        .overlay(Rectangle().fill(IJ.border).frame(height: 1), alignment: .bottom)
+    }
+
+    // MARK: - Brand bar (ArcReact wordmark above the toolbar)
+
+    /// Slim WebStorm-style title strip pinned above the toolbar. Carries the
+    /// `safeTopInset()` padding so the IJ.bgEditor background paints all the
+    /// way to the screen edge — and frames the product as "ArcReact, the
+    /// JetBrains AR-native IDE".
+    private var brandBar: some View {
+        HStack(spacing: 10) {
+            Image("ArcReactLogo")
+                .resizable()
+                .renderingMode(.original)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 22, height: 22)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("ArcReact")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(IJ.textPrimary)
+                Text("by JetBrains · 2026.1")
+                    .font(.system(size: 9, weight: .medium))
+                    .tracking(0.6)
+                    .foregroundColor(IJ.textSecondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, safeTopInset() + 4)
+        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(IJ.bgEditor)
         .overlay(Rectangle().fill(IJ.border).frame(height: 1), alignment: .bottom)
     }
@@ -415,83 +522,104 @@ struct PhoneIDEView: View {
 
     // MARK: - Split (editor / agent OR editor / preview)
 
-    private func splitArea(totalHeight: CGFloat) -> some View {
-        let editorH = max(120, totalHeight * editorRatio)
-        let restH = max(120, totalHeight - editorH - 6)
-
-        return VStack(spacing: 0) {
-            MonacoEditorView(
-                filename: session.currentFile,
-                code: session.currentCode,
-                onChange: { newCode in
-                    if newCode != session.currentCode {
-                        session.setCode(newCode, forFile: session.currentFile, pushHistory: false)
-                        scheduleLivePreviewRefresh()
-                    }
+    /// Editor with an optional bottom pane (Junie tool window OR live preview).
+    /// Mutually exclusive — Junie wins when both flags are on. Sized by SwiftUI
+    /// to fill whatever vertical space the tabs left behind, so the bottom
+    /// pane is always bounded above the status bar (no more cut-off input
+    /// fields under the home indicator).
+    @ViewBuilder
+    private var splitAreaView: some View {
+        let kind = bottomPaneKind
+        if kind == .none {
+            editorView.frame(maxHeight: .infinity)
+        } else {
+            GeometryReader { geo in
+                let h = geo.size.height
+                let editorH = max(120, h * editorRatio)
+                let restH = max(140, h - editorH - 6)
+                VStack(spacing: 0) {
+                    editorView.frame(height: editorH)
+                    dragHandle(totalHeight: h)
+                    bottomPane(kind: kind, height: restH)
                 }
-            )
-            .frame(height: editorH)
-            .background(IJ.bgEditor)
-
-            // Drag handle (resize editor vs agent/preview)
-            ZStack {
-                IJ.bgMain
-                Rectangle()
-                    .fill(IJ.border)
-                    .frame(width: 40, height: 3)
-                    .clipShape(RoundedRectangle(cornerRadius: 1.5))
-            }
-            .frame(maxWidth: .infinity, minHeight: 6, maxHeight: 6)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        if dragStartRatio == editorRatio { dragStartRatio = editorRatio }
-                        let delta = value.translation.height / max(totalHeight, 1)
-                        editorRatio = min(0.85, max(0.20, dragStartRatio + delta))
-                    }
-                    .onEnded { _ in dragStartRatio = editorRatio }
-            )
-
-            // The bottom slot is preview only now — Junie lives in a right
-            // slide-in tool window (toggled by the icon-strip Junie button)
-            // so the layout matches WebStorm New UI more closely.
-            if showPreview {
-                PreviewPane(html: session.currentCode, onWebViewReady: { wv in previewWebView = wv })
-                    .frame(height: restH)
-                    .background(Color.white)
             }
         }
     }
 
-    // MARK: - Right slide-in Junie tool window
+    private enum BottomPaneKind { case none, junie, preview }
 
-    private func junieRightPanel(height: CGFloat) -> some View {
-        let totalWidth = UIScreen.main.bounds.width
-        // Phone-sized: panel takes ~62% of the screen — leaves a strip of editor
-        // visible behind it like WebStorm's split tool windows.
-        let panelWidth = max(280, totalWidth * 0.62)
-        return ZStack(alignment: .trailing) {
-            if showJunie {
-                Color.black.opacity(0.001)
-                    .contentShape(Rectangle())
-                    .onTapGesture { withAnimation(.easeOut(duration: 0.22)) { showJunie = false } }
-                VStack(spacing: 0) {
-                    AgentPanel(session: session)
-                }
-                .frame(width: panelWidth, height: height)
-                .background(IJ.bgSidebar)
-                .overlay(
-                    Rectangle().fill(IJ.border).frame(width: 1),
-                    alignment: .leading
-                )
-                .overlay(
-                    Rectangle().fill(IJ.accentGreen).frame(height: 2),
-                    alignment: .top
-                )
-                .transition(.move(edge: .trailing))
+    private var bottomPaneKind: BottomPaneKind {
+        // Junie wins over preview when both are toggled — preview is a
+        // run-on-demand thing, Junie is the active conversation.
+        if showJunie { return .junie }
+        if showPreview { return .preview }
+        return .none
+    }
+
+    @ViewBuilder
+    private func bottomPane(kind: BottomPaneKind, height: CGFloat) -> some View {
+        switch kind {
+        case .junie:
+            VStack(spacing: 0) {
+                // Tool-window active stripe (green) — same accent as the
+                // Junie icon-strip slot, so it reads as "Junie tool window
+                // is the active bottom pane".
+                Rectangle().fill(IJ.accentGreen).frame(height: 2)
+                AgentPanel(session: session)
             }
+            .frame(height: height)
+            .background(IJ.bgSidebar)
+        case .preview:
+            ZStack {
+                PreviewPane(html: session.previewHtml ?? session.currentCode,
+                            session: session,
+                            onWebViewReady: { wv in previewWebView = wv })
+                if session.isGenerating {
+                    BuildingShimmer()
+                        .transition(.opacity)
+                }
+            }
+            .frame(height: height)
+            .background(Color.white)
+        case .none:
+            EmptyView()
         }
+    }
+
+    private var editorView: some View {
+        MonacoEditorView(
+            filename: session.currentFile,
+            code: session.currentCode,
+            onChange: { newCode in
+                if newCode != session.currentCode {
+                    session.setCode(newCode, forFile: session.currentFile, pushHistory: false)
+                    scheduleLivePreviewRefresh()
+                }
+            }
+        )
+        .background(IJ.bgEditor)
+    }
+
+    @ViewBuilder
+    private func dragHandle(totalHeight: CGFloat) -> some View {
+        ZStack {
+            IJ.bgMain
+            Rectangle()
+                .fill(IJ.border)
+                .frame(width: 40, height: 3)
+                .clipShape(RoundedRectangle(cornerRadius: 1.5))
+        }
+        .frame(maxWidth: .infinity, minHeight: 6, maxHeight: 6)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    if dragStartRatio == editorRatio { dragStartRatio = editorRatio }
+                    let delta = value.translation.height / max(totalHeight, 1)
+                    editorRatio = min(0.85, max(0.20, dragStartRatio + delta))
+                }
+                .onEnded { _ in dragStartRatio = editorRatio }
+        )
     }
 
     // MARK: - Status bar
@@ -540,6 +668,11 @@ struct PhoneIDEView: View {
         .font(.system(size: 11))
         .foregroundColor(IJ.textSecondary)
         .frame(height: statusHeight)
+        // Mirror the toolbar's safe-area trick: extend the bg into the bottom
+        // safe area (home-indicator zone) so LF · UTF-8 · branch · memory
+        // never sit underneath the iOS home bar. Content keeps its statusHeight
+        // — only the bg grows downward.
+        .padding(.bottom, safeBottomInset())
         .background(IJ.bgEditor)
         .overlay(Rectangle().fill(IJ.border).frame(height: 1), alignment: .top)
     }
@@ -664,7 +797,13 @@ struct PhoneIDEView: View {
         previewDebounce?.cancel()
         let work = DispatchWorkItem { [weak previewWebView] in
             guard let wv = previewWebView else { return }
-            wv.loadHTMLString(session.currentCode, baseURL: nil)
+            // Prefer the model-supplied bundled preview (Babel-standalone JSX
+            // wrap, etc.) — only fall through to currentCode for plain html
+            // projects where the active file IS the preview.
+            let html = session.previewHtml ?? session.currentCode
+            // baseURL gives the page a real origin so cross-origin script
+            // errors aren't sanitized to "Script error." in the console.
+            wv.loadHTMLString(html, baseURL: PhoneIDEView.previewBaseURL)
         }
         previewDebounce = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
@@ -678,20 +817,47 @@ struct PhoneIDEView: View {
               let win = scene.windows.first else { return 0 }
         return win.safeAreaInsets.top
     }
+
+    private func safeBottomInset() -> CGFloat {
+        guard let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).first,
+              let win = scene.windows.first else { return 0 }
+        return win.safeAreaInsets.bottom
+    }
+
+    /// True iff the captured preview console contains an error since the last
+    /// time the user opened the Debug sheet — drives the red dot on the
+    /// toolbar Debug icon.
+    private var hasErrorsInConsole: Bool {
+        session.consoleEntries.contains(where: { $0.level == .error })
+    }
 }
 
-/// Live preview pane — a WKWebView fed by ProjectSession.currentCode. Held in
-/// the parent view so we can re-load it on edit (debounced).
+/// Live preview pane — a WKWebView fed by either `session.previewHtml` (the
+/// bundled Babel-standalone JSX wrapper) or the current file's contents. Holds
+/// a ScriptMessageHandler that funnels console.log / errors back into
+/// `session.consoleEntries` so the toolbar Debug button can show them.
 private struct PreviewPane: UIViewRepresentable {
     let html: String
+    let session: ProjectSession
     let onWebViewReady: (WKWebView) -> Void
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
+
+        let userController = WKUserContentController()
+        userController.add(context.coordinator, name: "console")
+        userController.addUserScript(
+            WKUserScript(source: PreviewPane.consoleShim,
+                         injectionTime: .atDocumentStart,
+                         forMainFrameOnly: false)
+        )
+        config.userContentController = userController
+
         let wv = WKWebView(frame: .zero, configuration: config)
         wv.scrollView.bounces = false
-        wv.loadHTMLString(html, baseURL: nil)
+        wv.loadHTMLString(html, baseURL: PhoneIDEView.previewBaseURL)
         DispatchQueue.main.async { onWebViewReady(wv) }
         return wv
     }
@@ -700,5 +866,165 @@ private struct PreviewPane: UIViewRepresentable {
         // Initial load happens in makeUIView; subsequent reloads come from the
         // debounce in PhoneIDEView. Keep updateUIView a no-op so a parent state
         // tick doesn't trash the WebView mid-render.
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(session: session) }
+
+    /// JS injected at document-start so we capture the FIRST console call —
+    /// otherwise React's render-time errors fire before our shim is in place.
+    /// Wraps console.log/info/warn/error/debug, plus listens for `error` and
+    /// `unhandledrejection`. All payloads get forwarded to the Swift side via
+    /// `webkit.messageHandlers.console.postMessage`.
+    private static let consoleShim: String = """
+    (function(){
+      var levels = ['log','info','warn','error','debug'];
+      levels.forEach(function(level){
+        var orig = console[level] ? console[level].bind(console) : function(){};
+        console[level] = function(){
+          try {
+            var args = Array.prototype.slice.call(arguments).map(function(a){
+              if (a === null || a === undefined) return String(a);
+              if (typeof a === 'string') return a;
+              if (a instanceof Error) return (a.message || String(a));
+              try { return JSON.stringify(a); } catch (e) { return String(a); }
+            });
+            window.webkit.messageHandlers.console.postMessage({level: level, msg: args.join(' ')});
+          } catch (e) {}
+          orig.apply(null, arguments);
+        };
+      });
+      window.addEventListener('error', function(e){
+        try {
+          var loc = (e.filename || 'preview') + ':' + (e.lineno || '?');
+          window.webkit.messageHandlers.console.postMessage({level: 'error', msg: (e.message || 'error') + ' @ ' + loc});
+        } catch (err) {}
+      });
+      window.addEventListener('unhandledrejection', function(e){
+        try {
+          var reason = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+          window.webkit.messageHandlers.console.postMessage({level: 'error', msg: 'Unhandled promise: ' + reason});
+        } catch (err) {}
+      });
+    })();
+    """
+
+    @MainActor
+    final class Coordinator: NSObject, WKScriptMessageHandler {
+        let session: ProjectSession
+        init(session: ProjectSession) { self.session = session }
+
+        nonisolated func userContentController(_ ucc: WKUserContentController,
+                                               didReceive message: WKScriptMessage) {
+            guard message.name == "console",
+                  let dict = message.body as? [String: Any],
+                  let levelStr = dict["level"] as? String,
+                  let msg = dict["msg"] as? String else { return }
+            let level = ConsoleEntry.Level(rawValue: levelStr) ?? .log
+            Task { @MainActor in
+                self.session.appendConsole(level, msg)
+            }
+        }
+    }
+}
+
+/// Skeleton scaffolding shown over the preview pane during a build. Mimics
+/// "the page being assembled bit by bit" — header bar fades in, hero block,
+/// then 3 card rows — with a sweeping shimmer gradient running across them.
+/// Disappears the moment `session.isGenerating` flips back to false.
+private struct BuildingShimmer: View {
+    @State private var phase: CGFloat = 0
+    @State private var stage: Int = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            ZStack(alignment: .top) {
+                Color(red: 10/255, green: 10/255, blue: 10/255).opacity(0.96)
+
+                VStack(spacing: 18) {
+                    // Top nav row
+                    skeletonRow(width: w * 0.92, height: 36, cornerRadius: 8, delay: 0)
+                        .padding(.top, 28)
+                    // Hero block
+                    skeletonRow(width: w * 0.92, height: 180, cornerRadius: 18, delay: 1)
+                    // Body card grid
+                    HStack(spacing: 12) {
+                        skeletonRow(width: w * 0.30, height: 96, cornerRadius: 12, delay: 2)
+                        skeletonRow(width: w * 0.30, height: 96, cornerRadius: 12, delay: 2)
+                        skeletonRow(width: w * 0.30, height: 96, cornerRadius: 12, delay: 2)
+                    }
+                    skeletonRow(width: w * 0.92, height: 60, cornerRadius: 12, delay: 3)
+                    skeletonRow(width: w * 0.78, height: 22, cornerRadius: 6, delay: 4)
+                    skeletonRow(width: w * 0.62, height: 18, cornerRadius: 6, delay: 4)
+                    Spacer()
+                }
+                .frame(width: w, height: h, alignment: .top)
+
+                // Status pill
+                VStack {
+                    Spacer()
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.7).tint(.white.opacity(0.9))
+                        Text(stageLabel)
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .tracking(1.2)
+                            .foregroundColor(.white.opacity(0.92))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.black.opacity(0.7)))
+                    .padding(.bottom, 22)
+                }
+                .frame(width: w, height: h)
+            }
+            .clipped()
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+                phase = 1
+            }
+            // Step the status label so users see progress through phases.
+            let labels = stageLabels.count
+            for i in 1..<labels {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 1.8) {
+                    stage = i
+                }
+            }
+        }
+    }
+
+    private let stageLabels = [
+        "SCAFFOLDING PROJECT",
+        "WRITING package.json",
+        "BUILDING src/App.jsx",
+        "STYLING COMPONENTS",
+        "WIRING ENTRY POINT",
+        "RENDERING PREVIEW",
+    ]
+
+    private var stageLabel: String { stageLabels[min(stage, stageLabels.count - 1)] }
+
+    @ViewBuilder
+    private func skeletonRow(width: CGFloat, height: CGFloat,
+                             cornerRadius: CGFloat, delay: Int) -> some View {
+        // Each row's shimmer is offset by `delay * 0.18` so the build feels
+        // staggered — header reveals first, hero second, etc.
+        let local = max(0, phase - CGFloat(delay) * 0.12)
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(Color(red: 0.16, green: 0.16, blue: 0.18))
+            .overlay(
+                GeometryReader { geo in
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(0.10), .clear],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * 0.5)
+                    .offset(x: -geo.size.width * 0.5
+                            + (geo.size.width + geo.size.width * 0.5) * local)
+                }
+            )
+            .frame(width: width, height: height)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }

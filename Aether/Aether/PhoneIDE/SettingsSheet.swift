@@ -113,6 +113,7 @@ struct SettingsSheet: View {
         testMessage = ""
         var req = URLRequest(url: url, timeoutInterval: 6)
         req.httpMethod = "GET"
+        req.setValue("1", forHTTPHeaderField: "ngrok-skip-browser-warning")
         URLSession.shared.dataTask(with: req) { data, response, error in
             DispatchQueue.main.async {
                 if let error = error {

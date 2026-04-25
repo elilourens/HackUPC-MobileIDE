@@ -542,6 +542,11 @@ final class ARSessionManager: NSObject, ObservableObject {
         switch command {
         case .codegen(let prompt):
             startPlanning(prompt: prompt)
+        case .armWake:
+            // Wake phrase fired with no body — JARVIS acknowledges so the user
+            // knows their next utterance will be treated as a build prompt.
+            JarvisVoice.shared.speak("Yes sir. What would you like to build?")
+            appendTerminalLog(.info, "armed · awaiting prompt")
         case .confirm:
             confirmPendingPlan()
         case .cancel:
@@ -750,27 +755,31 @@ final class ARSessionManager: NSObject, ObservableObject {
         JarvisVoice.shared.speak("On it.")
         let startTime = CACurrentMediaTime()
 
-        let onResult: (Result<String, Error>) -> Void = { [weak self] result in
+        let onResult: (Result<BackendClient.BuildResult, Error>) -> Void = { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.session.isGenerating = false
                 switch result {
-                case .success(let code):
-                    let pushHistory = isModification
-                    self.session.setCode(code,
-                                         forFile: self.session.currentFile.isEmpty ? "index.html" : self.session.currentFile,
-                                         pushHistory: pushHistory)
+                case .success(let project):
+                    self.session.applyProject(project,
+                                              replace: !isModification,
+                                              pushHistory: isModification)
                     if !isModification {
                         self.panelManager?.enterLiveIDEMode()
                         self.panelManager?.materializePreview()
                     }
-                    self.panelManager?.setEditorCode(code, animated: !isModification)
+                    let primaryCode = self.session.currentCode
+                    self.panelManager?.setEditorCode(primaryCode, animated: !isModification)
                     self.panelManager?.setLiveFiles(active: self.session.currentFile,
                                                     files: Array(self.session.projectFiles.keys).sorted())
                     let elapsed = CACurrentMediaTime() - startTime
                     self.appendTerminalLog(.success,
-                                           "\(isModification ? "updated" : "generated") · \(String(format: "%.1f", elapsed))s")
-                    self.loadAndApplyPreview(code: code, settleDelay: isModification ? 0.3 : 0.6) {
+                                           "\(isModification ? "updated" : "generated") \(project.stack) · \(project.files.count) files · \(String(format: "%.1f", elapsed))s")
+                    // Preview the bundled HTML so JSX renders even though we
+                    // can't run vite — falls back to the file's own contents
+                    // for plain html projects.
+                    self.loadAndApplyPreview(code: project.previewHtml,
+                                             settleDelay: isModification ? 0.3 : 0.6) {
                         JarvisVoice.shared.speak(isModification ? "Done." : "Preview is live.")
                         self.appendTerminalLog(.success, "preview live")
                     }
@@ -784,13 +793,15 @@ final class ARSessionManager: NSObject, ObservableObject {
         if isModification {
             if let element = session.selectedElement {
                 BackendClient.shared.modifyElement(prompt: plan.expandedPrompt,
-                                                   currentCode: session.currentCode,
+                                                   files: session.projectFiles,
+                                                   primary: session.currentFile,
                                                    element: element,
                                                    session: session,
                                                    completion: onResult)
             } else {
                 BackendClient.shared.modify(prompt: plan.expandedPrompt,
-                                            currentCode: session.currentCode,
+                                            files: session.projectFiles,
+                                            primary: session.currentFile,
                                             session: session,
                                             completion: onResult)
             }

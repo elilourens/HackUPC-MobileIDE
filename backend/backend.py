@@ -4,11 +4,13 @@ import base64
 import json
 import math
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Union
 
+import certifi
 from bson import ObjectId
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
@@ -39,7 +41,10 @@ GHOST_REPLY_VOICE_ID = "lUTamkMw7gOzZbFIwmq4"
 
 EMBEDDING_MODEL = "text-embedding-3-large"
 VISION_MODEL = "gpt-4o"
-BUILD_MODEL = "gpt-5.4"
+# gpt-4o is ~3x faster than the gpt-5 family for the same React/Tailwind
+# output quality, and the multi-file JSON build was taking 90s+ before.
+# Override with `BUILD_MODEL` env var to switch back to a slower model.
+BUILD_MODEL = os.getenv("BUILD_MODEL", "gpt-4o")
 DB_NAME = "mobileide"
 COLLECTION = "images"
 CODE_EDITS_COLLECTION = "code_edits"
@@ -95,7 +100,15 @@ app.mount("/generated", StaticFiles(directory=str(generated_dir)), name="generat
 async def startup():
     mongo_uri = os.getenv("MONGODB_URI")
     if mongo_uri:
-        app.state.mongo = AsyncIOMotorClient(mongo_uri)
+        # tlsCAFile pins to the certifi bundle — the system OpenSSL on
+        # Python 3.14 / macOS otherwise fails the Atlas TLS handshake with
+        # `TLSV1_ALERT_INTERNAL_ERROR`. serverSelectionTimeoutMS keeps the
+        # request from hanging for 30s if the cluster is unreachable.
+        app.state.mongo = AsyncIOMotorClient(
+            mongo_uri,
+            tlsCAFile=certifi.where(),
+            serverSelectionTimeoutMS=8000,
+        )
         app.state.col = app.state.mongo[DB_NAME][COLLECTION]
         app.state.code_edits_col = app.state.mongo[DB_NAME][CODE_EDITS_COLLECTION]
     else:
@@ -130,7 +143,12 @@ class BuildRequest(BaseModel):
 
 class ModifyRequest(BaseModel):
     prompt: str
-    current_code: str
+    # New multi-file shape — full project map + which file the user is in.
+    # `current_code` kept for backwards-compat with older clients that still
+    # send a single HTML string.
+    files: Optional[dict[str, str]] = None
+    primary: Optional[str] = None
+    current_code: Optional[str] = None
 
 
 class ElementContext(BaseModel):
@@ -143,11 +161,28 @@ class ElementContext(BaseModel):
 
 class ModifyElementRequest(BaseModel):
     prompt: str
-    current_code: str
+    files: Optional[dict[str, str]] = None
+    primary: Optional[str] = None
+    current_code: Optional[str] = None
     element: ElementContext
 
 
 class BuildResponse(BaseModel):
+    """Multi-file project response.
+
+    `files` is the entire project keyed by repo-relative path; `primary` is
+    what the editor should open first; `preview_html` is a self-contained
+    HTML page the iOS WKWebView can render directly (Babel-standalone wrap of
+    the JSX, or a generated docs page for backend stacks); `stack` is one of
+    "react-vite" | "express" | "fastapi" | "html".
+
+    Legacy `html` field is filled with `preview_html` so old clients keep
+    working until they upgrade.
+    """
+    files: dict[str, str]
+    primary: str
+    preview_html: str
+    stack: str
     html: str
     success: bool
 
@@ -603,26 +638,320 @@ def _generate_html(messages: list[dict]) -> str:
     return _strip_html_fence(raw)
 
 
+PROJECT_BUILD_SYSTEM_PROMPT = """You are a world-class designer + senior engineer building shippable, beautiful sites. The user is on a phone — no terminal, no npm. They want a real multi-file project they could push to GitHub AND a polished preview that renders in a WebView.
+
+Stack from prompt:
+- UI / landing / portfolio / dashboard → react-vite
+- API / backend / server → express
+- FastAPI / python backend → fastapi
+- single static page → html
+
+Return ONLY this JSON (no markdown, no prose):
+{
+  "stack": "react-vite" | "express" | "fastapi" | "html",
+  "primary": "<path to open first>",
+  "files": { "<path>": "<content>", ... }
+}
+
+(Note: do NOT emit preview_html — the server builds it from your files.)
+
+==================== REACT-VITE PROJECTS ====================
+Required files:
+  - package.json  (vite, react@18, react-dom@18; scripts: dev=vite, build=vite build)
+  - vite.config.js
+  - index.html  (Vite root, has <div id="root"> and <script type="module" src="/src/main.jsx">)
+  - src/main.jsx  (createRoot from react-dom/client; import App from './App.jsx')
+  - src/App.jsx  (the page — ONE file with all sections inline, OR App.jsx + components/*.jsx)
+  - src/index.css  (Tailwind CDN is loaded by the preview; you can also add raw CSS here)
+  - README.md
+primary = "src/App.jsx".
+
+CRITICAL JSX RULES (the preview server inlines all your .jsx files into one Babel-standalone script — so):
+  - DO NOT use ES module import paths the browser can't resolve at runtime. The server strips imports/exports automatically. So your code must work when ALL imports are removed and every `export default Foo` becomes plain `function Foo`.
+  - Use plain function declarations: `function Hero() { return ... }`, `function App() { return <><Hero /><Pricing /></> }`. No `export default`. Don't rely on `import { useState } from 'react'` — use `const { useState, useEffect } = React;` at the top of App.jsx, OR use `React.useState` directly.
+  - Your `src/App.jsx` MUST end with `function App() { ... }` that renders the full page. The preview bundler calls `<App />`.
+  - Tailwind classes work — the preview loads `https://cdn.tailwindcss.com`. Use them aggressively.
+  - For images, use real Unsplash URLs: `https://images.unsplash.com/photo-{ID}?w=1600&q=80&auto=format&fit=crop`. Never use `placeholder` or empty `src`.
+
+==================== DESIGN BAR (read this twice) ====================
+Your output gets compared to vercel.com, linear.app, stripe.com, ramp.com, and apple.com. Hit that bar.
+- Type: huge headlines (text-6xl / text-7xl / text-8xl tracking-tight font-semibold). Body text-lg leading-relaxed. Use one Google Font: SF Pro / Inter / DM Sans / Plus Jakarta Sans / Sora.
+- Color: dark theme by default. bg-neutral-950 page, bg-neutral-900 cards, text-white headings, text-neutral-400 body. ONE accent color (sky-500 / emerald-500 / orange-500). NO rainbow, NO neon.
+- Layout: max-w-7xl mx-auto px-6. Sections py-24 / py-32. Grids gap-8 / gap-12. Real visual hierarchy — not a stack of identical cards.
+- Components: rounded-2xl, border border-neutral-800, hover:border-neutral-700, soft shadows.
+- Imagery: every section that COULD have a photo SHOULD have a photo (Unsplash). Hero gets a hero image or a product mock. No empty whitespace blocks. No `<img />` without a real src.
+- Copy: write real compelling product copy, not "Lorem ipsum" or generic placeholder text. If it's "Apple-style", write the kind of copy Apple would write.
+- Motion: use `transition`, `hover:scale-105`, `duration-300` on cards / buttons.
+- Accessibility: every button is real (`<button>`), every link is `<a>`, alt text on images.
+
+==================== EXPRESS ====================
+package.json (express + cors), server.js (app.listen(3000), example routes), routes/*.js, .env.example, README.md.
+primary = "server.js".
+
+==================== FASTAPI ====================
+main.py (FastAPI + uvicorn), requirements.txt, routers/*.py, .env.example, README.md.
+primary = "main.py".
+
+==================== HTML ====================
+One index.html. primary = "index.html".
+
+Return ONLY the JSON object. No markdown fences. No commentary."""
+
+
+def _generate_project(messages: list[dict]) -> dict:
+    """Run the JSON-mode multi-file project generator. Returns the parsed
+    dict so callers can wrap it as a `BuildResponse` (with backwards-compat
+    `html` aliasing `preview_html` for legacy iOS clients).
+    """
+    client = _require_openai()
+    response = client.chat.completions.create(
+        model=BUILD_MODEL,
+        messages=messages,
+        response_format={"type": "json_object"},
+    )
+    raw = response.choices[0].message.content or "{}"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(502, f"build returned invalid JSON: {exc}") from exc
+    return data
+
+
+def _build_response_from_project(data: dict) -> BuildResponse:
+    files = data.get("files") or {}
+    if not isinstance(files, dict) or not files:
+        raise HTTPException(502, "build response missing files")
+    # Normalize: every value must be a string.
+    files = {str(k): str(v) for k, v in files.items()}
+    primary = data.get("primary") or _pick_primary(files)
+    if primary not in files:
+        primary = _pick_primary(files)
+    stack = data.get("stack") or "react-vite"
+
+    # Build preview_html from the project files server-side. Models often
+    # emit a preview that contains `import` statements (or skip the preview
+    # entirely), which makes Babel-standalone fail and the user sees a
+    # half-rendered white page with placeholder boxes. By bundling here we
+    # guarantee a working render regardless of model output.
+    if stack == "react-vite":
+        preview_html = _bundle_react_preview(files)
+    elif stack == "html":
+        preview_html = files.get("index.html") or data.get("preview_html") or _docs_page(files, stack)
+    else:
+        # Backend stacks: model-supplied preview if any, else generated docs.
+        preview_html = data.get("preview_html") or _docs_page(files, stack)
+
+    return BuildResponse(
+        files=files,
+        primary=primary,
+        preview_html=preview_html,
+        stack=stack,
+        html=preview_html,  # legacy alias
+        success=True,
+    )
+
+
+# Matches single-line and multi-line `import … ;` statements. The DOTALL
+# flag lets the body span newlines (`import { useState,\n  useEffect } from
+# 'react';` was the silent killer — the previous single-line regex left
+# half a destructure behind, Babel choked, the whole preview went black).
+_IMPORT_RE = re.compile(r'^[ \t]*import\b[^;]*?;[ \t]*\n?', re.MULTILINE | re.DOTALL)
+# Bare side-effect imports without a semicolon: `import './app.css'`
+_IMPORT_BARE_RE = re.compile(r'^[ \t]*import\s+[\'"][^\'"]+[\'"][ \t]*\n', re.MULTILINE)
+_EXPORT_DEFAULT_RE = re.compile(r'^\s*export\s+default\s+', re.MULTILINE)
+_EXPORT_NAMED_RE = re.compile(r'^\s*export\s+(?=(?:const|let|var|function|class|async)\s)', re.MULTILINE)
+_EXPORT_BRACE_RE = re.compile(r'^\s*export\s*\{[^}]*\}\s*;?\s*\n?', re.MULTILINE)
+# `export default Foo;` where Foo is just an identifier — strip whole line
+# (leaving a bare `Foo;` that strips to nothing useful).
+_EXPORT_DEFAULT_IDENT_RE = re.compile(r'^\s*export\s+default\s+\w+\s*;?\s*\n?', re.MULTILINE)
+
+
+def _strip_es_modules(src: str) -> str:
+    """Remove ES-module syntax so the body works inside a single
+    Babel-standalone <script type="text/babel"> block. Handles multi-line
+    imports, bare side-effect imports (`import './foo.css'`), and every
+    flavor of export.
+    """
+    src = _IMPORT_RE.sub('', src)
+    src = _IMPORT_BARE_RE.sub('', src)
+    src = _EXPORT_DEFAULT_IDENT_RE.sub('', src)
+    src = _EXPORT_BRACE_RE.sub('', src)
+    src = _EXPORT_DEFAULT_RE.sub('', src)
+    src = _EXPORT_NAMED_RE.sub('', src)
+    return src
+
+
+def _bundle_react_preview(files: dict[str, str]) -> str:
+    """Concatenate every JSX/TSX file in the project (after stripping ES
+    module syntax) into one Babel-standalone bundle. Order: components
+    first (so they're declared before App), then App last. Tailwind CDN +
+    React 18 + ReactDOM 18 + Babel are loaded in <head>.
+    """
+    jsx_files = sorted(
+        [(p, c) for p, c in files.items()
+         if p.endswith(('.jsx', '.tsx', '.js')) and 'src/' in p],
+        key=lambda pc: (
+            # App.jsx last so functions it references are already declared.
+            1 if pc[0].endswith(('App.jsx', 'App.tsx')) else 0,
+            # main.jsx after components but before App is fine; we drop it
+            # below anyway since main.jsx just calls createRoot.
+            pc[0],
+        ),
+    )
+
+    # Drop main.jsx — it only does `createRoot(...).render(<App />)`, which
+    # we re-emit at the bottom of the bundle. Keeping it would cause a
+    # double-render or a reference error.
+    jsx_files = [(p, c) for p, c in jsx_files
+                 if not p.endswith(('main.jsx', 'main.tsx'))]
+
+    bundled = "\n\n".join(
+        f"// === {path} ===\n{_strip_es_modules(content)}"
+        for path, content in jsx_files
+    )
+
+    # CSS the model wrote — inline it. Tailwind handles 90% of styling but
+    # raw rules (e.g. custom keyframes) belong on the page.
+    css_blocks = "\n".join(
+        files[p] for p in ("src/index.css", "src/App.css")
+        if p in files
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Preview</title>
+<!-- Configure Tailwind BEFORE its script loads so dark mode + safelist
+     classes are JIT-compiled even if the model uses them dynamically. -->
+<script>
+  window.tailwind = window.tailwind || {{}};
+  window.tailwind.config = {{
+    darkMode: 'class',
+    theme: {{
+      extend: {{
+        fontFamily: {{
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+          display: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+        }},
+      }},
+    }},
+  }};
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Base dark-theme fallback so the page still looks intentional even if
+     Tailwind hasn't finished JIT'ing user-supplied classes. */
+  :root {{ color-scheme: dark; --bg: #0a0a0a; --fg: #fafafa; --muted: #a3a3a3; --card: #171717; --border: #262626; --accent: #38bdf8; }}
+  *, *::before, *::after {{ box-sizing: border-box; }}
+  html, body {{ margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }}
+  img {{ max-width: 100%; height: auto; display: block; }}
+  a {{ color: inherit; text-decoration: none; }}
+  button {{ cursor: pointer; }}
+  /* user CSS */
+{css_blocks}
+</style>
+</head>
+<body class="bg-neutral-950 text-neutral-50">
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+  // Hoist every common React hook + Fragment up so user code can call them
+  // without an explicit import. The bundler stripped the imports.
+  const React = window.React;
+  const ReactDOM = window.ReactDOM;
+  const {{ useState, useEffect, useRef, useMemo, useCallback,
+           useLayoutEffect, useReducer, useContext, useId,
+           createContext, forwardRef, memo, Fragment }} = React;
+  const ReactDOMClient = ReactDOM;
+
+{bundled}
+
+  // Boot. `App` is whatever the bundled src/App.jsx defined.
+  const __mount = document.getElementById('root');
+  function __boot() {{
+    try {{
+      if (typeof App !== 'function') {{
+        __mount.innerHTML = '<div style="padding:40px;font-family:system-ui;color:#f87171">Preview error: <code>App</code> component not found in the bundled source.</div>';
+        return;
+      }}
+      const node = React.createElement(App);
+      if (ReactDOMClient.createRoot) {{
+        ReactDOMClient.createRoot(__mount).render(node);
+      }} else {{
+        ReactDOMClient.render(node, __mount);
+      }}
+    }} catch (err) {{
+      __mount.innerHTML = '<pre style="padding:24px;color:#f87171;font:12px ui-monospace,monospace;white-space:pre-wrap">Preview crashed:\\n' + (err && err.stack || err) + '</pre>';
+    }}
+  }}
+  __boot();
+</script>
+</body>
+</html>"""
+
+
+def _pick_primary(files: dict[str, str]) -> str:
+    for candidate in ("src/App.jsx", "src/App.tsx", "src/main.jsx", "App.jsx",
+                      "server.js", "main.py", "index.html"):
+        if candidate in files:
+            return candidate
+    return next(iter(sorted(files.keys())), "index.html")
+
+
+def _docs_page(files: dict[str, str], stack: str) -> str:
+    items = "".join(f"<li><code>{p}</code></li>" for p in sorted(files.keys())[:30])
+    return (
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        f'<title>{stack} project</title>'
+        '<style>body{font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;'
+        'background:#1e1f22;color:#bcbec4;padding:32px;margin:0}'
+        'h1{font-size:18px;color:#fff;margin:0 0 4px}'
+        'p{font-size:13px;color:#9ea1a8}'
+        'ul{font-size:12px;line-height:1.6;color:#d5d7db;list-style:none;padding-left:0;margin-top:16px}'
+        'code{background:#2b2d30;padding:2px 6px;border-radius:4px;color:#5fb865}</style>'
+        '</head><body>'
+        f'<h1>{stack} project ready</h1>'
+        '<p>Backend stacks don\'t run in the preview pane — push to GitHub to deploy.</p>'
+        f'<ul>{items}</ul></body></html>'
+    )
+
+
 PLANNER_SYSTEM_PROMPT = """You are the Junie planner inside ArcReact, a JetBrains AR-native IDE. The user has spoken or typed a request. Before any code is written, you produce a tight execution plan that JARVIS will read aloud and the user must confirm.
+
+ArcReact builds REAL multi-file projects, not single HTML pages. The build step that runs after this plan is approved produces a complete project tree (package.json, vite.config.js, src/App.jsx, etc. for React; or server.js, routes/, package.json for Express; or main.py, requirements.txt for FastAPI). Plan accordingly.
+
+Pick a stack from the prompt:
+- "landing page", "marketing site", "portfolio", "dashboard", anything UI → react-vite (Vite + React 18)
+- "API", "backend", "server", "REST" → express (Node + Express)
+- "FastAPI", "python backend" → fastapi (FastAPI + uvicorn)
+- "blog", "static site", "single page" → html (one index.html)
 
 Return ONLY a single JSON object — no markdown, no prose, no fences. Schema:
 
 {
-  "summary": "1–2 sentences. Plain English. What you'll build, in concrete terms. JARVIS speaks this verbatim.",
+  "summary": "1–2 sentences. Plain English. What you'll build AND the stack you'll use (e.g. 'I'll scaffold a React + Vite landing page for…'). JARVIS speaks this verbatim.",
   "steps": [
     { "index": 1, "action": "<short verb phrase>", "target": "<file or component>", "why": "<one sentence>" },
     ...
   ],
-  "expanded_prompt": "A detailed brief that /api/build will receive after the user confirms. This is the HIDDEN prompt — write it like a senior PM handing a task to an LLM. Include: (a) the user's literal intent restated, (b) section breakdown with content tone, (c) layout & component breakdown, (d) accent color (one of blue-500 / emerald-500 / orange-500 — pick what fits the request), (e) imagery suggestions (Unsplash topic keywords), (f) typography mood (one Google Font from: DM Sans, Plus Jakarta Sans, Sora, Outfit, Manrope), (g) any specific micro-interactions or animations that would elevate it. End with: 'Render as a single self-contained HTML file using React 18 + Tailwind via CDN per the build system rules.'"
+  "expanded_prompt": "A detailed brief that /api/build will receive after the user confirms. This is the HIDDEN prompt — write it like a senior PM handing a task to an LLM. Include: (a) the user's literal intent restated, (b) the chosen stack, (c) section/route breakdown with tone, (d) layout & component breakdown for UI projects, (e) accent color (blue-500 / emerald-500 / orange-500 — pick what fits) for UI projects, (f) imagery suggestions (Unsplash topic keywords) for UI projects, (g) typography mood (one Google Font from: DM Sans, Plus Jakarta Sans, Sora, Outfit, Manrope) for UI projects, (h) any specific micro-interactions or animations that would elevate it. End with: 'Return a complete multi-file project as JSON per the build system rules — every file must be present.'"
 }
 
 Plan rules:
 - 3 to 6 steps. Each step is a concrete action a coder would take.
-- target should look like a path: "index.html · hero", "index.html · pricing-grid", "components/CTA".
-- The summary must be honest about what the page will be — don't oversell.
-- expanded_prompt must be 4–10 sentences and READS LIKE A REAL CREATIVE BRIEF, not bullet points.
+- target should be a real repo-relative path the build will write, e.g.:
+    React: "package.json", "src/App.jsx", "src/main.jsx", "src/index.css", "index.html"
+    Express: "package.json", "server.js", "routes/items.js", ".env.example"
+    FastAPI: "main.py", "requirements.txt", "routers/items.py"
+- The summary MUST name the stack so the user knows what they're getting (not "single-page implementation").
+- expanded_prompt must be 4–10 sentences and READS LIKE A REAL CREATIVE BRIEF.
 
-If the user is asking for a modification (current_code provided), the plan is the diff: which sections change, what stays. The expanded_prompt then ends with: 'Apply the change to the existing HTML; preserve everything not affected.'"""
+If the user is asking for a modification (files+primary or current_code provided), the plan is the diff: which files change, what stays. expanded_prompt then ends with: 'Edit only what's necessary; return the complete updated project so the IDE can replace it atomically.'"""
 
 
 @app.post("/api/plan", response_model=PlanResponse)
@@ -685,43 +1014,54 @@ def api_build(payload: BuildRequest) -> BuildResponse:
     if not payload.prompt.strip():
         raise HTTPException(400, "prompt cannot be empty")
 
-    html = _generate_html(
+    data = _generate_project(
         [
-            {"role": "system", "content": BUILD_SYSTEM_PROMPT},
+            {"role": "system", "content": PROJECT_BUILD_SYSTEM_PROMPT},
             {"role": "user", "content": payload.prompt},
         ]
     )
-    return BuildResponse(html=html, success=True)
+    return _build_response_from_project(data)
 
 
 @app.post("/api/modify", response_model=BuildResponse)
 def api_modify(payload: ModifyRequest) -> BuildResponse:
     if not payload.prompt.strip():
         raise HTTPException(400, "prompt cannot be empty")
-    if not payload.current_code.strip():
-        raise HTTPException(400, "current_code cannot be empty")
 
-    user_content = (
-        f"Modification request: {payload.prompt}\n\n"
-        f"Current HTML:\n{payload.current_code}\n\n"
-        "Return the complete modified HTML file. Preserve everything not affected by the request."
-    )
+    # Build a "current project" payload — preferring the new files+primary
+    # shape, but falling back to the legacy single-HTML field so older clients
+    # keep working until they upgrade.
+    if payload.files and payload.primary:
+        files_blob = json.dumps(payload.files)
+        user_content = (
+            f"CURRENT PROJECT (primary = {payload.primary}):\n{files_blob}\n\n"
+            f"REQUESTED CHANGE:\n{payload.prompt}\n\n"
+            "Return the COMPLETE updated project as JSON in the same shape."
+        )
+    elif payload.current_code and payload.current_code.strip():
+        user_content = (
+            f"CURRENT PROJECT (single index.html):\n{payload.current_code}\n\n"
+            f"REQUESTED CHANGE:\n{payload.prompt}\n\n"
+            "Return the COMPLETE updated project as JSON. If the change warrants splitting "
+            "into a multi-file React project, do that — otherwise keep it single-file."
+        )
+    else:
+        raise HTTPException(400, "modify requires either files+primary or current_code")
 
-    html = _generate_html(
+    data = _generate_project(
         [
-            {"role": "system", "content": BUILD_SYSTEM_PROMPT},
+            {"role": "system", "content": PROJECT_BUILD_SYSTEM_PROMPT
+                + "\n\nCONTEXT: This is a MODIFICATION. Preserve existing stack, layout, design language, and component structure. Edit only what's necessary."},
             {"role": "user", "content": user_content},
         ]
     )
-    return BuildResponse(html=html, success=True)
+    return _build_response_from_project(data)
 
 
 @app.post("/api/modify-element", response_model=BuildResponse)
 def api_modify_element(payload: ModifyElementRequest) -> BuildResponse:
     if not payload.prompt.strip():
         raise HTTPException(400, "prompt cannot be empty")
-    if not payload.current_code.strip():
-        raise HTTPException(400, "current_code cannot be empty")
 
     element_lines = []
     if payload.element.tag:
@@ -732,21 +1072,30 @@ def api_modify_element(payload: ModifyElementRequest) -> BuildResponse:
         element_lines.append(f"text: {payload.element.text}")
     element_block = "\n".join(element_lines) if element_lines else "(no element metadata provided)"
 
+    if payload.files and payload.primary:
+        project_blob = json.dumps(payload.files)
+        scope = f"primary = {payload.primary}"
+    elif payload.current_code and payload.current_code.strip():
+        project_blob = payload.current_code
+        scope = "single index.html"
+    else:
+        raise HTTPException(400, "modify-element requires either files+primary or current_code")
+
     user_content = (
-        f"Modify ONLY the specific element described below. Leave every other element exactly as it is.\n\n"
+        f"Modify ONLY the element described below. Leave every other element exactly as it is.\n\n"
         f"Target element:\n{element_block}\n\n"
         f"Modification request: {payload.prompt}\n\n"
-        f"Current HTML:\n{payload.current_code}\n\n"
-        "Return the complete modified HTML file."
+        f"CURRENT PROJECT ({scope}):\n{project_blob}\n\n"
+        "Return the COMPLETE updated project as JSON in the same shape."
     )
 
-    html = _generate_html(
+    data = _generate_project(
         [
-            {"role": "system", "content": BUILD_SYSTEM_PROMPT},
+            {"role": "system", "content": PROJECT_BUILD_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ]
     )
-    return BuildResponse(html=html, success=True)
+    return _build_response_from_project(data)
 
 
 class CodeEditRequest(BaseModel):

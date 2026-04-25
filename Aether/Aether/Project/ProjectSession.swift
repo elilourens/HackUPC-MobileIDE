@@ -27,6 +27,18 @@ struct TerminalLine: Equatable {
     let text: String
 }
 
+/// One entry in the Debug Console — captured from the preview WKWebView via
+/// an injected JS shim that overrides `console.log/info/warn/error/debug` and
+/// listens for `error` / `unhandledrejection`. Surfaced to the toolbar Debug
+/// sheet so users can actually see runtime errors from their JSX.
+struct ConsoleEntry: Identifiable, Equatable {
+    enum Level: String { case log, info, warn, error, debug }
+    let id = UUID()
+    let level: Level
+    let text: String
+    let timestamp: Date
+}
+
 /// One agent-chat message rendered in the phone-IDE agent panel.
 struct ChatMessage: Identifiable, Equatable {
     enum Role { case user, assistant, system }
@@ -60,6 +72,17 @@ final class ProjectSession: ObservableObject {
     /// first user prompt is a fresh generation, not a modify-the-splash call.
     @Published private(set) var isSeededDemoContent: Bool = false
 
+    /// Self-contained HTML bundle the live preview pane should render. For a
+    /// React/Vite project this is the model-supplied Babel-standalone wrap of
+    /// the components (since WKWebView can't run `vite dev`). For a plain
+    /// `html` project this matches `currentCode`. nil → fall back to whatever
+    /// `currentCode` is.
+    @Published private(set) var previewHtml: String?
+    /// What kind of project the user has open ("react-vite", "express",
+    /// "fastapi", "html"). Used by the file tree + preview pane to render
+    /// stack-aware affordances.
+    @Published private(set) var stack: String = "html"
+
     /// In-flight Junie execution plan awaiting user confirmation. Surfaced to
     /// both the AR HUD overlay and the phone agent panel. Set by the codegen
     /// pipeline after `/api/plan`; cleared by `confirmPlan` / `cancelPlan`.
@@ -73,9 +96,23 @@ final class ProjectSession: ObservableObject {
     /// Stack of (file, code) pairs pushed before each modification so undo can restore.
     private var history: [(file: String, code: String)] = []
 
+    /// Per-file debounce timers so manual editor keystrokes don't flood the
+    /// `/code-edits` collection — we only push a snapshot when the user pauses
+    /// typing for `editRecordDebounce` seconds. Structural changes (apply,
+    /// create, rename, delete) bypass this and push immediately.
+    private var editRecordWorkItems: [String: DispatchWorkItem] = [:]
+    /// Last content we POSTed for each file, so the next push can attach
+    /// `previous_content` (lets a teammate diff against the prior snapshot).
+    private var lastRecordedContent: [String: String] = [:]
+    private let editRecordDebounce: TimeInterval = 1.2
+
     // MARK: - Terminal log (AR Junie panel)
     @Published private(set) var terminalLines: [TerminalLine] = []
     private let terminalCap: Int = 60
+
+    // MARK: - Debug console (preview WebView output)
+    @Published private(set) var consoleEntries: [ConsoleEntry] = []
+    private let consoleCap: Int = 200
 
     // MARK: - Agent chat (phone-IDE Aether panel)
     @Published private(set) var chatMessages: [ChatMessage] = []
@@ -96,7 +133,13 @@ final class ProjectSession: ObservableObject {
 
     // MARK: - Backend
     @Published var backendURL: String {
-        didSet { UserDefaults.standard.set(backendURL, forKey: Self.kBackendURL) }
+        didSet {
+            let d = UserDefaults.standard
+            d.set(backendURL, forKey: Self.kBackendURL)
+            // Lockstep the version so subsequent launches treat this as the
+            // user's intentional override, not a stale pre-migration value.
+            d.set(Self.currentBackendURLVersion, forKey: Self.kBackendURLVersion)
+        }
     }
     /// When true, voice toggle is on so JARVIS speaks confirmations in AR mode.
     @Published var jarvisVoiceEnabled: Bool {
@@ -107,12 +150,38 @@ final class ProjectSession: ObservableObject {
     private static let kGitHubRepo  = "aether.github.repo"
     private static let kBackendURL  = "aether.backend.url"
     private static let kJarvisOn    = "aether.jarvis.on"
+    /// Bumped whenever `kDefaultBackendURL` changes. On launch, if the saved
+    /// version doesn't match the current one, we drop any stale saved
+    /// backend URL and re-adopt the new default so existing installs don't
+    /// stay stuck on `http://localhost:8000` after a tunnel switch.
+    private static let kBackendURLVersion = "aether.backend.url.version"
+    private static let currentBackendURLVersion = 2
+
+    /// Public ngrok tunnel that fronts the laptop FastAPI backend so the iOS
+    /// app reaches `/api/plan` + `/api/build` from cellular (not just same
+    /// WiFi). Update this and bump `currentBackendURLVersion` if the tunnel
+    /// domain ever changes — the version-bump forces existing installs to
+    /// drop their stale UserDefaults override and re-adopt the new default.
+    private static let kDefaultBackendURL = "https://founder-cane-compile.ngrok-free.dev"
 
     init() {
         let d = UserDefaults.standard
         self.gitHubToken = d.string(forKey: Self.kGitHubToken) ?? ""
         self.gitHubRepo  = d.string(forKey: Self.kGitHubRepo) ?? ""
-        self.backendURL  = d.string(forKey: Self.kBackendURL) ?? "http://localhost:8000"
+        // Backend URL: prefer saved value, but only if its version matches
+        // the current default — otherwise migrate to the new default. This
+        // catches installs that saved `http://localhost:8000` back when that
+        // was the default and would otherwise stay stuck on it after we
+        // switched the default to the ngrok tunnel.
+        let savedVersion = d.integer(forKey: Self.kBackendURLVersion)
+        if savedVersion == Self.currentBackendURLVersion,
+           let saved = d.string(forKey: Self.kBackendURL), !saved.isEmpty {
+            self.backendURL = saved
+        } else {
+            self.backendURL = Self.kDefaultBackendURL
+            d.set(Self.kDefaultBackendURL, forKey: Self.kBackendURL)
+            d.set(Self.currentBackendURLVersion, forKey: Self.kBackendURLVersion)
+        }
         self.jarvisVoiceEnabled = d.object(forKey: Self.kJarvisOn) as? Bool ?? true
         seedStarterPageIfNeeded()
     }
@@ -122,7 +191,10 @@ final class ProjectSession: ObservableObject {
     /// the user already has any code.
     func seedStarterPageIfNeeded() {
         guard !hasAnyCode else { return }
-        setCode(StarterPage.html, forFile: "index.html", pushHistory: false)
+        // recordEdit:false — the splash is local-only demo scaffolding, no
+        // value in syncing it to teammates.
+        setCode(StarterPage.html, forFile: "index.html",
+                pushHistory: false, recordEdit: false)
         // Mark AFTER setCode (which would clear it) so codegen routing knows
         // this buffer is the demo splash, not real user content.
         isSeededDemoContent = true
@@ -148,8 +220,15 @@ final class ProjectSession: ObservableObject {
 
     /// Push the current state onto history then write `code` for `file`. Use
     /// `pushHistory: false` for the first generation so undo doesn't restore an
-    /// empty file.
-    func setCode(_ code: String, forFile file: String, pushHistory: Bool) {
+    /// empty file. `recordEdit` controls whether the change gets pushed to the
+    /// `/code-edits` mongo collection (false for the splash seed so the demo
+    /// content doesn't pollute teammate sync).
+    func setCode(_ code: String,
+                 forFile file: String,
+                 pushHistory: Bool,
+                 recordEdit: Bool = true,
+                 editType: String = "manual") {
+        let previous = projectFiles[file]
         if pushHistory, let existing = projectFiles[currentFile] {
             history.append((currentFile, existing))
             if history.count > 30 { history.removeFirst(history.count - 30) }
@@ -164,11 +243,66 @@ final class ProjectSession: ObservableObject {
         }
         // Mark this file as modified for the tab dot (cleared by GitHub push).
         modifiedFiles.insert(file)
+
+        if recordEdit && code != previous {
+            scheduleRecordEdit(filename: file,
+                               content: code,
+                               previousContent: previous,
+                               editType: editType,
+                               description: nil,
+                               debounce: editType == "manual")
+        }
     }
 
     /// Clear the modified marker — call after a successful GitHub push of `file`.
     func markFileSynced(_ file: String) {
         modifiedFiles.remove(file)
+    }
+
+    /// Atomically install a multi-file project — the result of a Junie build
+    /// or modify call. `replace: true` wipes the existing project (fresh
+    /// generation), `replace: false` merges the returned files on top of the
+    /// current ones (modification). Always sets `previewHtml` + `stack` so
+    /// the preview pane and file tree can render stack-aware affordances.
+    func applyProject(_ result: BackendClient.BuildResult,
+                      replace: Bool, pushHistory: Bool) {
+        if pushHistory {
+            // Stash every file so undo can restore the prior project state.
+            for (file, code) in projectFiles {
+                history.append((file, code))
+            }
+            if history.count > 30 { history.removeFirst(history.count - 30) }
+        }
+        // Capture prior state per path so each /code-edits row can carry the
+        // previous_content (lets the teammate diff against last snapshot).
+        let prior = projectFiles
+        let editType = replace ? "ai_generate" : "ai_modify"
+        if replace {
+            projectFiles.removeAll(keepingCapacity: true)
+            openTabs.removeAll(keepingCapacity: true)
+            modifiedFiles.removeAll(keepingCapacity: true)
+            gitHubFileShas.removeAll(keepingCapacity: true)
+        }
+        for (path, content) in result.files {
+            projectFiles[path] = content
+            modifiedFiles.insert(path)
+            if prior[path] != content {
+                scheduleRecordEdit(filename: path,
+                                   content: content,
+                                   previousContent: prior[path],
+                                   editType: editType,
+                                   description: "stack=\(result.stack)",
+                                   debounce: false)
+            }
+        }
+        let primary = projectFiles[result.primary] != nil
+            ? result.primary
+            : (projectFiles.keys.sorted().first ?? "index.html")
+        currentFile = primary
+        ensureTabOpen(primary)
+        previewHtml = result.previewHtml
+        stack = result.stack
+        if isSeededDemoContent { isSeededDemoContent = false }
     }
 
     /// Pop the latest history entry into projectFiles. Returns the (file, code) restored,
@@ -186,6 +320,12 @@ final class ProjectSession: ObservableObject {
     func createFile(_ name: String) {
         if projectFiles[name] == nil {
             projectFiles[name] = ""
+            scheduleRecordEdit(filename: name,
+                               content: "",
+                               previousContent: nil,
+                               editType: "create",
+                               description: nil,
+                               debounce: false)
         }
         ensureTabOpen(name)
     }
@@ -212,10 +352,25 @@ final class ProjectSession: ObservableObject {
             gitHubFileShas.removeValue(forKey: from)
             gitHubFileShas[to] = sha
         }
+        // Tombstone the old path + write the new path so a teammate replaying
+        // edits ends up with the same file tree.
+        scheduleRecordEdit(filename: from,
+                           content: "",
+                           previousContent: code,
+                           editType: "rename",
+                           description: "renamed to \(to)",
+                           debounce: false)
+        scheduleRecordEdit(filename: to,
+                           content: code,
+                           previousContent: nil,
+                           editType: "rename",
+                           description: "renamed from \(from)",
+                           debounce: false)
     }
 
     /// Delete a project file and clean up tabs / shas / modified-set.
     func deleteFile(_ name: String) {
+        let prior = projectFiles[name]
         projectFiles.removeValue(forKey: name)
         modifiedFiles.remove(name)
         gitHubFileShas.removeValue(forKey: name)
@@ -225,6 +380,12 @@ final class ProjectSession: ObservableObject {
         if currentFile == name {
             currentFile = openTabs.last ?? (projectFiles.keys.sorted().first ?? "index.html")
         }
+        scheduleRecordEdit(filename: name,
+                           content: "",
+                           previousContent: prior,
+                           editType: "delete",
+                           description: nil,
+                           debounce: false)
     }
 
     /// Close an editor tab. If it was the active tab, switch to the previous one.
@@ -263,6 +424,19 @@ final class ProjectSession: ObservableObject {
     func termError(_ text: String)   { appendTerminal(.error,   "✗ " + text) }
     func termInfo(_ text: String)    { appendTerminal(.info,    "✦ " + text) }
 
+    // MARK: - Debug console
+
+    func appendConsole(_ level: ConsoleEntry.Level, _ text: String) {
+        consoleEntries.append(ConsoleEntry(level: level, text: text, timestamp: Date()))
+        if consoleEntries.count > consoleCap {
+            consoleEntries.removeFirst(consoleEntries.count - consoleCap)
+        }
+    }
+
+    func clearConsole() {
+        consoleEntries.removeAll()
+    }
+
     // MARK: - Chat (phone IDE)
 
     /// Append a new chat message and return its id so callers can later replace
@@ -281,5 +455,47 @@ final class ProjectSession: ObservableObject {
     func replaceMessage(id: UUID, with text: String) {
         guard let idx = chatMessages.firstIndex(where: { $0.id == id }) else { return }
         chatMessages[idx].text = text
+    }
+
+    // MARK: - Edit recording (mongo /code-edits sync)
+
+    /// Push an edit snapshot to the backend so a teammate can replay the
+    /// stream. `debounce: true` is used for raw editor keystrokes — we wait
+    /// `editRecordDebounce` seconds before posting so we don't flood the
+    /// collection with one row per character. Structural changes (apply,
+    /// create, rename, delete) pass `debounce: false` and post immediately.
+    fileprivate func scheduleRecordEdit(filename: String,
+                                        content: String,
+                                        previousContent: String?,
+                                        editType: String,
+                                        description: String?,
+                                        debounce: Bool) {
+        let push = { [weak self] in
+            guard let self = self else { return }
+            let prevForPost = previousContent ?? self.lastRecordedContent[filename]
+            self.lastRecordedContent[filename] = content
+            BackendClient.shared.recordCodeEdit(
+                filename: filename,
+                content: content,
+                previousContent: prevForPost,
+                editType: editType,
+                description: description,
+                baseURL: self.backendURL
+            )
+        }
+
+        if debounce {
+            editRecordWorkItems[filename]?.cancel()
+            let item = DispatchWorkItem(block: push)
+            editRecordWorkItems[filename] = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + editRecordDebounce, execute: item)
+        } else {
+            // Cancel any pending debounced push for this file so we don't
+            // double-post a slightly-older snapshot right after a structural
+            // change has already gone out.
+            editRecordWorkItems[filename]?.cancel()
+            editRecordWorkItems[filename] = nil
+            push()
+        }
     }
 }

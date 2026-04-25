@@ -3,6 +3,9 @@
 .mcp.json
 Aether/Aether/Project/Secrets.swift
 
+# Local server logs
+*.log
+
 
 
 

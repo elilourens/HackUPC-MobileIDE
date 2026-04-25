@@ -310,18 +310,20 @@ struct AgentPanel: View {
         session.isGenerating = true
         let placeholderId = session.appendChat(.assistant, "building…")
 
-        let onResult: (Result<String, Error>) -> Void = { result in
+        let onResult: (Result<BackendClient.BuildResult, Error>) -> Void = { result in
             DispatchQueue.main.async {
                 session.isGenerating = false
                 switch result {
-                case .success(let html):
-                    session.setCode(html,
-                                    forFile: session.currentFile.isEmpty ? "index.html" : session.currentFile,
-                                    pushHistory: isModification)
+                case .success(let project):
+                    session.applyProject(project,
+                                         replace: !isModification,
+                                         pushHistory: isModification)
+                    let fileCount = project.files.count
+                    let stackName = project.stack
                     session.replaceMessage(id: placeholderId,
                         with: isModification
-                            ? "Updated \(session.currentFile)."
-                            : "Created \(session.currentFile). Tap Preview to see it.")
+                            ? "Updated \(fileCount) files in your \(stackName) project."
+                            : "Created a \(stackName) project · \(fileCount) files · primary \(project.primary). Tap Run to preview.")
                 case .failure(let err):
                     session.replaceMessage(id: placeholderId,
                                            with: "Build failed: \(err.localizedDescription)")
@@ -331,7 +333,8 @@ struct AgentPanel: View {
 
         if isModification {
             BackendClient.shared.modify(prompt: plan.expandedPrompt,
-                                        currentCode: session.currentCode,
+                                        files: session.projectFiles,
+                                        primary: session.currentFile,
                                         session: session, completion: onResult)
         } else {
             BackendClient.shared.generate(prompt: plan.expandedPrompt,
