@@ -21,6 +21,23 @@ final class PanelManager {
     private(set) var theme: WorkspaceTheme = .dark
     private(set) var focusMode: Bool = false
 
+    // Phase 2 — live IDE state
+    /// When non-nil, drawEditor renders these lines (with HTML/CSS/JS highlighting)
+    /// instead of the hardcoded React snippet. nil = legacy demo placeholder.
+    private var liveCode: String?
+    /// When animating, only the first `animatedLineCount` lines of liveCode are shown.
+    /// nil = full code visible.
+    private var animatedLineCount: Int?
+    private var lineAnimationTimer: Timer?
+    /// Active filename + tab list, when the live file tree is in use.
+    private var liveFiles: [String] = []
+    private var liveActiveFile: String?
+    /// Composited preview snapshot from PreviewRenderer. nil = legacy fake login form.
+    private var previewImage: UIImage?
+    /// Live terminal log, when set. nil = legacy hardcoded npm output.
+    private var liveTerminal: [TerminalLine] = []
+    private var liveTerminalActive: Bool = false
+
     // Holo elements (lazy-attached when their voice command fires)
     private var gitTimeline: GitTimelineEntity?
     private var statsRing: StatsRingEntity?
@@ -391,6 +408,64 @@ final class PanelManager {
         regenerateAssistant()
     }
 
+    // MARK: - Phase 2 live setters
+
+    /// Set the live editor code. If `animated`, reveal it line by line at 80ms/line.
+    /// On a fresh animation we cancel any in-flight one.
+    func setEditorCode(_ code: String, animated: Bool) {
+        lineAnimationTimer?.invalidate()
+        lineAnimationTimer = nil
+        liveCode = code
+
+        if animated {
+            let total = code.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).count
+            animatedLineCount = 0
+            regenerateEditor()
+            // Use a Timer scheduled on .main; per-tick we increment and regen.
+            let timer = Timer(timeInterval: 0.08, repeats: true) { [weak self] timer in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { timer.invalidate(); return }
+                    let count = (self.animatedLineCount ?? 0) + 1
+                    if count >= total {
+                        self.animatedLineCount = nil
+                        self.regenerateEditor()
+                        timer.invalidate()
+                        self.lineAnimationTimer = nil
+                    } else {
+                        self.animatedLineCount = count
+                        self.regenerateEditor()
+                    }
+                }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            lineAnimationTimer = timer
+        } else {
+            animatedLineCount = nil
+            regenerateEditor()
+        }
+    }
+
+    /// Composite a fresh preview snapshot into the preview panel chrome.
+    func setPreviewImage(_ image: UIImage?) {
+        previewImage = image
+        regeneratePreview()
+    }
+
+    /// Switch the file tree to live mode and render the given files (active file
+    /// highlighted in cyan).
+    func setLiveFiles(active: String, files: [String]) {
+        liveActiveFile = active
+        liveFiles = files
+        regenerateFileTree()
+    }
+
+    /// Switch the terminal to live mode and render the given log lines.
+    func setTerminalLog(_ lines: [TerminalLine]) {
+        liveTerminalActive = true
+        liveTerminal = lines
+        regenerateTerminal()
+    }
+
     private func refreshAllTextures() {
         regenerateEditor()
         regenerateFileTree()
@@ -422,6 +497,13 @@ final class PanelManager {
     private func regenerateAssistant() {
         guard let panel = panels[.assistant] else { return }
         if let texture = renderTexture(for: .assistant, widthMeters: panel.widthMeters, heightMeters: panel.heightMeters) {
+            panel.updateTexture(texture)
+        }
+    }
+
+    private func regeneratePreview() {
+        guard let panel = panels[.preview] else { return }
+        if let texture = renderTexture(for: .preview, widthMeters: panel.widthMeters, heightMeters: panel.heightMeters) {
             panel.updateTexture(texture)
         }
     }
@@ -634,10 +716,17 @@ final class PanelManager {
 
         let tabFontSize = tabBarHeight * 0.50
         let tabFont = UIFont.systemFont(ofSize: tabFontSize, weight: .medium)
-        let tabs = ["Login.tsx", "App.tsx"]
+
+        // Determine tabs and active tab
+        let (tabs, activeTabIndex): ([String], Int) = if let live = liveCode, let activeFile = liveActiveFile {
+            ([activeFile], 0)
+        } else {
+            (["Login.tsx", "App.tsx"], activeTab)
+        }
+
         var x = tabBarRect.minX
         for (i, t) in tabs.enumerated() {
-            let isActive = (i == activeTab)
+            let isActive = (i == activeTabIndex)
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: tabFont,
                 .foregroundColor: isActive ? Jarvis.cyan : Jarvis.textDim,
@@ -662,62 +751,123 @@ final class PanelManager {
         let xCode = outerPad + lineNumWidth + 12
         var y = codeTop
 
-        let allLines: [String] = [
-            "import React from 'react'",
-            "import { useState } from 'react'",
-            "",
-            "const Login = () => {",
-            "  const [email, setEmail] = useState('')",
-            "  const [pass, setPass] = useState('')",
-            "",
-            "  return (",
-            "    <div className=\"login\">",
-            "      <h1>Sign in</h1>",
-            "      <input",
-            "        type=\"email\"",
-            "        value={email}",
-            "      />",
-            "      <button>Login</button>",
-            "    </div>",
-            "  )",
-            "}"
-        ]
-
-        for (idx, line) in allLines.enumerated() {
-            let numStr = NSAttributedString(string: String(format: "%2d", idx + 1), attributes: [
-                .font: codeFont,
-                .foregroundColor: Jarvis.synLineNum
-            ])
-            numStr.draw(at: CGPoint(x: outerPad, y: y))
-
-            // line-number column divider (very faint cyan)
-            ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
-            ctx.setLineWidth(0.5)
-            ctx.move(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y - 2))
-            ctx.addLine(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y + codeFontSize + 2))
-            ctx.strokePath()
-
-            let tokens = tokenize(line: line)
-            var dx = xCode
-            for (text, kind) in tokens {
-                let color: UIColor
-                switch kind {
-                case .keyword: color = Jarvis.synKeyword
-                case .function: color = Jarvis.synFunction
-                case .string: color = Jarvis.synString
-                case .jsx: color = Jarvis.synJSX
-                case .normal: color = Jarvis.synNormal
-                }
-                let attr = NSAttributedString(string: text, attributes: [
-                    .font: codeFont,
-                    .foregroundColor: color
-                ])
-                attr.draw(at: CGPoint(x: dx, y: y))
-                dx += attr.size().width
+        if let live = liveCode {
+            // Live code rendering with HTML/CSS/JS tokenization
+            let allLines = live.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
+            let linesToRender = if let count = animatedLineCount {
+                Array(allLines.prefix(count))
+            } else {
+                allLines
             }
 
-            y += codeFontSize * 1.42
-            if y > codeBottom - codeFontSize { break }
+            // Scan for language state changes
+            var currentLang: WebLang = .html
+            for (idx, line) in linesToRender.enumerated() {
+                // Track style and script tags
+                if line.contains("<style") {
+                    currentLang = .css
+                } else if line.contains("</style>") {
+                    currentLang = .html
+                } else if line.contains("<script") {
+                    currentLang = .js
+                } else if line.contains("</script>") {
+                    currentLang = .html
+                }
+
+                let numStr = NSAttributedString(string: String(format: "%2d", idx + 1), attributes: [
+                    .font: codeFont,
+                    .foregroundColor: Jarvis.synLineNum
+                ])
+                numStr.draw(at: CGPoint(x: outerPad, y: y))
+
+                // line-number column divider (very faint cyan)
+                ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+                ctx.setLineWidth(0.5)
+                ctx.move(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y - 2))
+                ctx.addLine(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y + codeFontSize + 2))
+                ctx.strokePath()
+
+                let tokens = tokenizeWeb(line: line, lang: currentLang)
+                var dx = xCode
+                for (text, kind) in tokens {
+                    let color: UIColor
+                    switch kind {
+                    case .keyword: color = Jarvis.synKeyword
+                    case .function: color = Jarvis.synFunction
+                    case .string: color = Jarvis.synString
+                    case .jsx: color = Jarvis.synJSX
+                    case .normal: color = Jarvis.synNormal
+                    }
+                    let attr = NSAttributedString(string: text, attributes: [
+                        .font: codeFont,
+                        .foregroundColor: color
+                    ])
+                    attr.draw(at: CGPoint(x: dx, y: y))
+                    dx += attr.size().width
+                }
+
+                y += codeFontSize * 1.42
+                if y > codeBottom - codeFontSize { break }
+            }
+        } else {
+            // Phase 1 demo: hardcoded React snippet
+            let allLines: [String] = [
+                "import React from 'react'",
+                "import { useState } from 'react'",
+                "",
+                "const Login = () => {",
+                "  const [email, setEmail] = useState('')",
+                "  const [pass, setPass] = useState('')",
+                "",
+                "  return (",
+                "    <div className=\"login\">",
+                "      <h1>Sign in</h1>",
+                "      <input",
+                "        type=\"email\"",
+                "        value={email}",
+                "      />",
+                "      <button>Login</button>",
+                "    </div>",
+                "  )",
+                "}"
+            ]
+
+            for (idx, line) in allLines.enumerated() {
+                let numStr = NSAttributedString(string: String(format: "%2d", idx + 1), attributes: [
+                    .font: codeFont,
+                    .foregroundColor: Jarvis.synLineNum
+                ])
+                numStr.draw(at: CGPoint(x: outerPad, y: y))
+
+                // line-number column divider (very faint cyan)
+                ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+                ctx.setLineWidth(0.5)
+                ctx.move(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y - 2))
+                ctx.addLine(to: CGPoint(x: outerPad + lineNumWidth + 4, y: y + codeFontSize + 2))
+                ctx.strokePath()
+
+                let tokens = tokenize(line: line)
+                var dx = xCode
+                for (text, kind) in tokens {
+                    let color: UIColor
+                    switch kind {
+                    case .keyword: color = Jarvis.synKeyword
+                    case .function: color = Jarvis.synFunction
+                    case .string: color = Jarvis.synString
+                    case .jsx: color = Jarvis.synJSX
+                    case .normal: color = Jarvis.synNormal
+                    }
+                    let attr = NSAttributedString(string: text, attributes: [
+                        .font: codeFont,
+                        .foregroundColor: color
+                    ])
+                    attr.draw(at: CGPoint(x: dx, y: y))
+                    dx += attr.size().width
+                }
+
+                y += codeFontSize * 1.42
+                if y > codeBottom - codeFontSize { break }
+            }
         }
 
         drawSystemReadout(ctx, size: size, extra: "EDIT")
@@ -725,6 +875,8 @@ final class PanelManager {
     }
 
     private enum TokenKind { case keyword, function, string, jsx, normal }
+
+    private enum WebLang { case html, css, js }
 
     private func tokenize(line: String) -> [(String, TokenKind)] {
         var result: [(String, TokenKind)] = []
@@ -817,6 +969,187 @@ final class PanelManager {
         return result
     }
 
+    private func tokenizeWeb(line: String, lang: WebLang) -> [(String, TokenKind)] {
+        var result: [(String, TokenKind)] = []
+        let jsKeywords: Set<String> = ["const", "let", "var", "function", "return", "if", "else", "for", "while", "true", "false", "null", "document", "window", "querySelector", "addEventListener"]
+        let cssProperties: Set<String> = ["color", "background", "font-size", "width", "height", "padding", "margin", "display", "flex", "border", "text-align", "position", "top", "left", "right", "bottom"]
+
+        var current = ""
+        var inString: Character? = nil
+        var inComment: Int = 0  // 0 = not in comment, 1 = in //, 2 = in /* */
+
+        func flush() {
+            if current.isEmpty { return }
+            let trimmed = current.trimmingCharacters(in: .whitespaces)
+
+            if let _ = inString {
+                result.append((current, .string))
+            } else if inComment > 0 {
+                result.append((current, .normal))  // comments as normal for now
+            } else if lang == .html {
+                if current.contains("<") || current.contains(">") {
+                    result.append((current, .jsx))
+                } else if current.contains("=") && !trimmed.isEmpty {
+                    let parts = current.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                    if parts.count > 0 {
+                        result.append((String(parts[0]), .jsx))
+                        if parts.count > 1 {
+                            result.append(("=", .normal))
+                            result.append((String(parts[1]), .string))
+                        }
+                    }
+                } else {
+                    result.append((current, .normal))
+                }
+            } else if lang == .css {
+                if trimmed.hasSuffix(":") {
+                    result.append((current, .jsx))  // property name before :
+                } else if trimmed.hasSuffix(";") || current.contains(";") {
+                    result.append((current, .normal))  // value
+                } else if cssProperties.contains(trimmed) {
+                    result.append((current, .jsx))
+                } else {
+                    result.append((current, .normal))
+                }
+            } else if lang == .js {
+                if jsKeywords.contains(trimmed) {
+                    result.append((current, .keyword))
+                } else if trimmed.first?.isUppercase == true && trimmed.count > 1 {
+                    result.append((current, .function))
+                } else {
+                    result.append((current, .normal))
+                }
+            }
+            current = ""
+        }
+
+        var i = line.startIndex
+        while i < line.endIndex {
+            let c = line[i]
+
+            // Handle comments
+            if inComment == 0 && c == "/" && line.index(after: i) < line.endIndex && line[line.index(after: i)] == "/" {
+                flush()
+                let comment = String(line[i...])
+                result.append((comment, .normal))
+                break
+            }
+            if inComment == 0 && c == "/" && line.index(after: i) < line.endIndex && line[line.index(after: i)] == "*" {
+                flush()
+                inComment = 2
+                current.append(c)
+                i = line.index(after: i)
+                current.append(line[i])
+                i = line.index(after: i)
+                continue
+            }
+            if inComment == 2 && c == "*" && line.index(after: i) < line.endIndex && line[line.index(after: i)] == "/" {
+                current.append(c)
+                i = line.index(after: i)
+                current.append(line[i])
+                result.append((current, .normal))
+                current = ""
+                inComment = 0
+                i = line.index(after: i)
+                continue
+            }
+            if inComment == 2 {
+                current.append(c)
+                i = line.index(after: i)
+                continue
+            }
+
+            // Handle HTML comments
+            if inComment == 0 && lang == .html && c == "<" && line[i...].hasPrefix("<!--") {
+                flush()
+                var comment = ""
+                var j = i
+                while j < line.endIndex {
+                    comment.append(line[j])
+                    if comment.hasSuffix("-->") { break }
+                    j = line.index(after: j)
+                }
+                result.append((comment, .normal))
+                i = line.index(comment.endIndex, offsetBy: -1, limitedBy: line.startIndex) ?? line.endIndex
+                i = line.index(after: i)
+                continue
+            }
+
+            // Handle strings
+            if let s = inString {
+                current.append(c)
+                if c == s {
+                    result.append((current, .string))
+                    current = ""
+                    inString = nil
+                }
+                i = line.index(after: i)
+                continue
+            }
+            if c == "'" || c == "\"" {
+                flush()
+                current = String(c)
+                inString = c
+                i = line.index(after: i)
+                continue
+            }
+
+            // Handle HTML tags
+            if lang == .html && c == "<" {
+                flush()
+                var tag = "<"
+                var j = line.index(after: i)
+                while j < line.endIndex {
+                    let ch = line[j]
+                    tag.append(ch)
+                    if ch == ">" { break }
+                    j = line.index(after: j)
+                }
+                result.append((tag, .jsx))
+                i = line.index(after: i)
+                while i < line.endIndex && line[i] != ">" {
+                    i = line.index(after: i)
+                }
+                if i < line.endIndex { i = line.index(after: i) }
+                continue
+            }
+
+            // Handle CSS/JS identifiers and properties
+            if c.isLetter || c == "_" {
+                var word = ""
+                var j = i
+                while j < line.endIndex, line[j].isLetter || line[j].isNumber || line[j] == "_" || line[j] == "-" {
+                    word.append(line[j])
+                    j = line.index(after: j)
+                }
+                current.append(contentsOf: word)
+                i = j
+                continue
+            }
+
+            // Handle special characters
+            if c == ":" || c == ";" || c == "=" {
+                flush()
+                current = String(c)
+                flush()
+                i = line.index(after: i)
+                continue
+            }
+
+            // Whitespace and other
+            if c.isWhitespace {
+                flush()
+                current = String(c)
+                flush()
+            } else {
+                current.append(c)
+            }
+            i = line.index(after: i)
+        }
+        flush()
+        return result
+    }
+
     // MARK: File tree
     private func drawFileTree(in ctx: CGContext, size: CGSize) {
         drawJarvisBackground(ctx, size: size)
@@ -844,17 +1177,26 @@ final class PanelManager {
         ctx.strokePath()
 
         struct Item { let label: String; let indent: CGFloat; let highlight: Bool; let isFolder: Bool }
-        let items: [Item] = [
-            Item(label: "src",           indent: 0,  highlight: false, isFolder: true),
-            Item(label: "App.tsx",       indent: 28, highlight: false, isFolder: false),
-            Item(label: "Login.tsx",     indent: 28, highlight: true,  isFolder: false),
-            Item(label: "index.css",     indent: 28, highlight: false, isFolder: false),
-            Item(label: "utils.ts",      indent: 28, highlight: false, isFolder: false),
-            Item(label: "public",        indent: 0,  highlight: false, isFolder: true),
-            Item(label: "index.html",    indent: 28, highlight: false, isFolder: false),
-            Item(label: "package.json",  indent: 0,  highlight: false, isFolder: false),
-            Item(label: "tsconfig.json", indent: 0,  highlight: false, isFolder: false),
-        ]
+
+        let items: [Item] = if !liveFiles.isEmpty && liveActiveFile != nil {
+            // Live file mode: render each file from liveFiles
+            liveFiles.map { filename in
+                Item(label: filename, indent: 0, highlight: filename == liveActiveFile, isFolder: false)
+            }
+        } else {
+            // Phase 1 demo: hardcoded project structure
+            [
+                Item(label: "src",           indent: 0,  highlight: false, isFolder: true),
+                Item(label: "App.tsx",       indent: 28, highlight: false, isFolder: false),
+                Item(label: "Login.tsx",     indent: 28, highlight: true,  isFolder: false),
+                Item(label: "index.css",     indent: 28, highlight: false, isFolder: false),
+                Item(label: "utils.ts",      indent: 28, highlight: false, isFolder: false),
+                Item(label: "public",        indent: 0,  highlight: false, isFolder: true),
+                Item(label: "index.html",    indent: 28, highlight: false, isFolder: false),
+                Item(label: "package.json",  indent: 0,  highlight: false, isFolder: false),
+                Item(label: "tsconfig.json", indent: 0,  highlight: false, isFolder: false),
+            ]
+        }
 
         for item in items {
             let labelColor: UIColor = item.highlight
@@ -915,6 +1257,8 @@ final class PanelManager {
         // JARVIS terminal: cyan title, neon-green prompt, cyan-grey output
         let promptGreen = UIColor(red: 0.43, green: 1.00, blue: 0.69, alpha: 1)
         let outputCyan  = UIColor(red: 0.55, green: 0.85, blue: 0.95, alpha: 1)
+        let successGreen = UIColor(red: 0.43, green: 0.90, blue: 0.69, alpha: 1)
+        let errorRed = UIColor(red: 1.0, green: 0.45, blue: 0.45, alpha: 1)
 
         var y: CGFloat = pad + 6
         NSAttributedString(string: "TERMINAL", attributes: [
@@ -931,18 +1275,39 @@ final class PanelManager {
         ctx.addLine(to: CGPoint(x: size.width - pad, y: y - bodyFontSize * 0.4))
         ctx.strokePath()
 
-        let lines: [(String, UIColor)] = [
-            ("$ npm run dev",            promptGreen),
-            ("  compiled in 1.2s",        outputCyan),
-            ("  ready on localhost:3000", outputCyan),
-            ("$ █",                       promptGreen),
-        ]
-        for (text, color) in lines {
-            NSAttributedString(string: text, attributes: [
-                .font: bodyFont,
-                .foregroundColor: color
-            ]).draw(at: CGPoint(x: pad + 4, y: y))
-            y += bodyFontSize * 1.4
+        if liveTerminalActive {
+            // Live terminal mode: render last 14 entries from liveTerminal
+            let linesToRender = Array(liveTerminal.suffix(14))
+            for terminalLine in linesToRender {
+                let color: UIColor
+                switch terminalLine.kind {
+                case .command: color = promptGreen
+                case .output: color = outputCyan
+                case .success: color = successGreen
+                case .error: color = errorRed
+                case .info: color = Jarvis.textDim
+                }
+                NSAttributedString(string: terminalLine.text, attributes: [
+                    .font: bodyFont,
+                    .foregroundColor: color
+                ]).draw(at: CGPoint(x: pad + 4, y: y))
+                y += bodyFontSize * 1.4
+            }
+        } else {
+            // Phase 1 demo: hardcoded npm output
+            let lines: [(String, UIColor)] = [
+                ("$ npm run dev",            promptGreen),
+                ("  compiled in 1.2s",        outputCyan),
+                ("  ready on localhost:3000", outputCyan),
+                ("$ █",                       promptGreen),
+            ]
+            for (text, color) in lines {
+                NSAttributedString(string: text, attributes: [
+                    .font: bodyFont,
+                    .foregroundColor: color
+                ]).draw(at: CGPoint(x: pad + 4, y: y))
+                y += bodyFontSize * 1.4
+            }
         }
 
         drawSystemReadout(ctx, size: size, extra: "SHELL")
@@ -1054,44 +1419,49 @@ final class PanelManager {
         ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
         ctx.stroke(inner)
 
-        // Fake login form on the white surface
-        let formCenter = CGPoint(x: inner.midX, y: inner.midY)
-        let titleSize = inner.height * 0.10
-        let titleAttr = NSAttributedString(string: "Sign in", attributes: [
-            .font: UIFont.systemFont(ofSize: titleSize, weight: .semibold),
-            .foregroundColor: UIColor(red: 0.10, green: 0.13, blue: 0.18, alpha: 1)
-        ])
-        let titleW = titleAttr.size().width
-        titleAttr.draw(at: CGPoint(x: formCenter.x - titleW / 2, y: inner.minY + inner.height * 0.18))
+        if let preview = previewImage {
+            // Live preview: draw the image filling the inner rect
+            preview.draw(in: inner)
+        } else {
+            // Phase 1 demo: fake login form
+            let formCenter = CGPoint(x: inner.midX, y: inner.midY)
+            let titleSize = inner.height * 0.10
+            let titleAttr = NSAttributedString(string: "Sign in", attributes: [
+                .font: UIFont.systemFont(ofSize: titleSize, weight: .semibold),
+                .foregroundColor: UIColor(red: 0.10, green: 0.13, blue: 0.18, alpha: 1)
+            ])
+            let titleW = titleAttr.size().width
+            titleAttr.draw(at: CGPoint(x: formCenter.x - titleW / 2, y: inner.minY + inner.height * 0.18))
 
-        // Two input fields
-        let fieldWidth = inner.width * 0.55
-        let fieldHeight = inner.height * 0.085
-        let fieldX = formCenter.x - fieldWidth / 2
-        var fieldY = inner.minY + inner.height * 0.36
+            // Two input fields
+            let fieldWidth = inner.width * 0.55
+            let fieldHeight = inner.height * 0.085
+            let fieldX = formCenter.x - fieldWidth / 2
+            var fieldY = inner.minY + inner.height * 0.36
 
-        let fieldFont = UIFont.systemFont(ofSize: fieldHeight * 0.42, weight: .regular)
-        for placeholder in ["email@example.com", "••••••••"] {
-            ctx.setStrokeColor(UIColor(white: 0.85, alpha: 1).cgColor)
-            ctx.setLineWidth(1)
-            ctx.stroke(CGRect(x: fieldX, y: fieldY, width: fieldWidth, height: fieldHeight))
-            NSAttributedString(string: placeholder, attributes: [
-                .font: fieldFont,
-                .foregroundColor: UIColor(white: 0.55, alpha: 1)
-            ]).draw(at: CGPoint(x: fieldX + 12, y: fieldY + fieldHeight / 2 - fieldHeight * 0.25))
-            fieldY += fieldHeight * 1.4
+            let fieldFont = UIFont.systemFont(ofSize: fieldHeight * 0.42, weight: .regular)
+            for placeholder in ["email@example.com", "••••••••"] {
+                ctx.setStrokeColor(UIColor(white: 0.85, alpha: 1).cgColor)
+                ctx.setLineWidth(1)
+                ctx.stroke(CGRect(x: fieldX, y: fieldY, width: fieldWidth, height: fieldHeight))
+                NSAttributedString(string: placeholder, attributes: [
+                    .font: fieldFont,
+                    .foregroundColor: UIColor(white: 0.55, alpha: 1)
+                ]).draw(at: CGPoint(x: fieldX + 12, y: fieldY + fieldHeight / 2 - fieldHeight * 0.25))
+                fieldY += fieldHeight * 1.4
+            }
+
+            // Login button (blue)
+            let btn = CGRect(x: fieldX, y: fieldY + 8, width: fieldWidth, height: fieldHeight)
+            UIColor(red: 0.0, green: 0.48, blue: 1.0, alpha: 1).setFill()
+            ctx.fill(btn)
+            let btnText = NSAttributedString(string: "Login", attributes: [
+                .font: UIFont.systemFont(ofSize: fieldHeight * 0.42, weight: .medium),
+                .foregroundColor: UIColor.white
+            ])
+            let btnTextW = btnText.size().width
+            btnText.draw(at: CGPoint(x: btn.midX - btnTextW / 2, y: btn.midY - fieldHeight * 0.25))
         }
-
-        // Login button (blue)
-        let btn = CGRect(x: fieldX, y: fieldY + 8, width: fieldWidth, height: fieldHeight)
-        UIColor(red: 0.0, green: 0.48, blue: 1.0, alpha: 1).setFill()
-        ctx.fill(btn)
-        let btnText = NSAttributedString(string: "Login", attributes: [
-            .font: UIFont.systemFont(ofSize: fieldHeight * 0.42, weight: .medium),
-            .foregroundColor: UIColor.white
-        ])
-        let btnTextW = btnText.size().width
-        btnText.draw(at: CGPoint(x: btn.midX - btnTextW / 2, y: btn.midY - fieldHeight * 0.25))
 
         drawSystemReadout(ctx, size: size, extra: "WEB")
         drawCornerBrackets(ctx, size: size)

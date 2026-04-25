@@ -30,6 +30,13 @@ final class ARSessionManager: NSObject, ObservableObject {
     private(set) var panelManager: PanelManager?
     private var placementTransform: simd_float4x4?
 
+    // MARK: Phase 2 — Live IDE
+    let session = ProjectSession()
+    private lazy var previewRenderer: PreviewRenderer = PreviewRenderer()
+    /// When true, the next preview-pointing tap selects an element instead of toggling
+    /// panel selection. Set by the "select" voice command.
+    private var selectionArmed: Bool = false
+
     // MARK: Hand & gestures
     nonisolated let handTracker = HandTracker()
     let gestureInterpreter = GestureInterpreter()
@@ -134,12 +141,61 @@ final class ARSessionManager: NSObject, ObservableObject {
             }
             return
         }
-        // Post-placement: tap a panel to select it (toggle), tap empty to deselect.
+        // Post-placement: check for preview panel element selection first
+        if let hitResult = arView.hitTest(point, query: .nearest, mask: .all).first,
+           let kind = panelManager?.panelKind(for: hitResult.entity),
+           kind == .preview,
+           !session.currentCode.isEmpty {
+            // Try element selection on the preview panel
+            handlePreviewTap(hitResult: hitResult)
+            return
+        }
+
+        // Default panel selection (toggle)
         if let entity = arView.hitTest(point, query: .nearest, mask: .all).first?.entity,
            let kind = panelManager?.panelKind(for: entity) {
             selectPanel(selectedPanel == kind ? nil : kind)
         } else {
             selectPanel(nil)
+        }
+    }
+
+    private func handlePreviewTap(hitResult: CollisionCastHit) {
+        guard let panelManager = panelManager,
+              let previewPanel = panelManager.panels[.preview] else { return }
+
+        // RealityKit's hitTest returns the world-space hit position directly.
+        let hitWorld = hitResult.position
+        // Convert world position to panel-local coordinates
+        let localPos = previewPanel.convert(position: hitWorld, from: nil)
+
+        // Panel dimensions in meters
+        let widthMeters = previewPanel.widthMeters
+        let heightMeters = previewPanel.heightMeters
+        let halfW = widthMeters / 2
+        let halfH = heightMeters / 2
+
+        // Map to UV (0–1)
+        let u = (localPos.x + halfW) / widthMeters
+        let v = (localPos.y + halfH) / heightMeters
+
+        // Guard against out-of-bounds (shouldn't happen on a valid hit, but safe)
+        guard u >= 0, u <= 1, v >= 0, v <= 1 else { return }
+
+        // Map to web pixel coordinates (375×667, Y-flipped). u/v are Float; convert
+        // explicitly so the CGPoint init compiles.
+        let webX = CGFloat(u) * 375
+        let webY = CGFloat(1 - v) * 667
+
+        previewRenderer.selectElement(at: CGPoint(x: webX, y: webY)) { [weak self] info, image in
+            guard let self = self else { return }
+            self.session.setSelectedElement(info)
+            if let image = image {
+                self.panelManager?.setPreviewImage(image)
+            }
+            self.appendTerminalLog(.command, "selected \(info?.humanLabel ?? "element")")
+            JarvisVoice.shared.speak("Selected. What would you like to change?")
+            self.selectionArmed = false
         }
     }
 
@@ -398,6 +454,103 @@ final class ARSessionManager: NSObject, ObservableObject {
 
     func handleVoiceCommand(_ command: VoiceCommand) {
         switch command {
+        case .codegen(let prompt):
+            if session.currentCode.isEmpty {
+                // Fresh generation
+                session.isGenerating = true
+                JarvisVoice.shared.speak("On it sir.")
+                appendTerminalLog(.command, "generating index.html...")
+                panelManager?.showPanel(.preview)
+                CodeGenerator.shared.generate(prompt: prompt) { [weak self] result in
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        switch result {
+                        case .success(let code):
+                            self.session.setCode(code, forFile: "index.html", pushHistory: false)
+                            self.panelManager?.setEditorCode(code, animated: true)
+                            self.panelManager?.setLiveFiles(active: "index.html", files: Array(self.session.projectFiles.keys).sorted())
+                            let lineCount = code.split(separator: "\n").count
+                            self.appendTerminalLog(.success, "generated \(lineCount) lines")
+                            self.loadAndApplyPreview(code: code, settleDelay: 0.6) {
+                                JarvisVoice.shared.speak("Preview is live.")
+                                self.appendTerminalLog(.success, "preview live")
+                            }
+                            self.session.isGenerating = false
+                        case .failure:
+                            JarvisVoice.shared.speak("Generation failed, sir.")
+                            self.appendTerminalLog(.error, "generation failed")
+                            self.session.isGenerating = false
+                        }
+                    }
+                }
+            } else {
+                // Modification
+                JarvisVoice.shared.speak("Updating.")
+                appendTerminalLog(.command, "modifying \(session.currentFile)...")
+                CodeGenerator.shared.modify(currentCode: session.currentCode, prompt: prompt, selected: session.selectedElement) { [weak self] result in
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        switch result {
+                        case .success(let newCode):
+                            self.session.setCode(newCode, forFile: self.session.currentFile, pushHistory: true)
+                            self.panelManager?.setEditorCode(newCode, animated: false)
+                            if self.session.selectedElement != nil {
+                                self.session.setSelectedElement(nil)
+                                self.previewRenderer.clearSelection { [weak self] image in
+                                    self?.panelManager?.setPreviewImage(image)
+                                }
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                                guard let self = self else { return }
+                                self.loadAndApplyPreview(code: newCode, settleDelay: 0.3) {
+                                    JarvisVoice.shared.speak("Done.")
+                                    self.appendTerminalLog(.success, "updated")
+                                }
+                            }
+                        case .failure:
+                            JarvisVoice.shared.speak("Modification failed.")
+                            self.appendTerminalLog(.error, "modification failed")
+                        }
+                    }
+                }
+            }
+        case .selectElement:
+            selectionArmed = true
+            JarvisVoice.shared.speak("Tap on the preview to select.")
+        case .deselectElement:
+            selectionArmed = false
+            previewRenderer.clearSelection { [weak self] image in
+                self?.panelManager?.setPreviewImage(image)
+            }
+            session.setSelectedElement(nil)
+            JarvisVoice.shared.speak("Selection cleared.")
+        case .undo:
+            if let restored = session.undo() {
+                panelManager?.setEditorCode(restored.code, animated: false)
+                if restored.file == "index.html" {
+                    loadAndApplyPreview(code: restored.code, settleDelay: 0.3) {
+                        JarvisVoice.shared.speak("Reverted.")
+                    }
+                } else {
+                    JarvisVoice.shared.speak("Reverted.")
+                }
+                appendTerminalLog(.command, "undo")
+            } else {
+                JarvisVoice.shared.speak("Nothing to undo.")
+            }
+        case .newFile(let name):
+            session.createFile(name)
+            panelManager?.setLiveFiles(active: session.currentFile, files: Array(session.projectFiles.keys).sorted())
+            appendTerminalLog(.command, "created \(name)")
+            JarvisVoice.shared.speak("File created.")
+        case .runPreview:
+            panelManager?.showPanel(.preview)
+            loadAndApplyPreview(code: session.currentCode, settleDelay: 0.3) {
+                JarvisVoice.shared.speak("Running.")
+            }
+        case .save:
+            JarvisVoice.shared.speak("Saved to project.")
+            appendTerminalLog(.command, "save")
         case .showPreview:
             panelManager?.showPanel(.preview)
             JarvisVoice.shared.speak("Pulling up the preview now.")
@@ -533,6 +686,28 @@ final class ARSessionManager: NSObject, ObservableObject {
         }
         aiResetWorkItem = item
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.4, execute: item)
+    }
+
+    private func appendTerminalLog(_ kind: TerminalLine.Kind, _ text: String) {
+        switch kind {
+        case .command: session.termCommand(text)
+        case .output:  session.termOutput(text)
+        case .success: session.termSuccess(text)
+        case .error:   session.termError(text)
+        case .info:    session.termInfo(text)
+        }
+        panelManager?.setTerminalLog(session.terminalLines)
+    }
+
+    /// Load HTML into the off-screen WKWebView, snapshot, apply to preview panel.
+    /// Calls `onPreviewReady` after the snapshot is in place.
+    private func loadAndApplyPreview(code: String, settleDelay: TimeInterval, onPreviewReady: (() -> Void)? = nil) {
+        appendTerminalLog(.command, "rendering preview...")
+        previewRenderer.loadHTML(code, settleDelay: settleDelay) { [weak self] image in
+            guard let self = self else { return }
+            self.panelManager?.setPreviewImage(image)
+            onPreviewReady?()
+        }
     }
 }
 

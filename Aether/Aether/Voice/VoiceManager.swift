@@ -25,6 +25,24 @@ enum VoiceCommand: Equatable {
     case lightMode
     case createFunction(name: String)
     case ask(String)
+
+    // Phase 2 — live IDE
+    /// Generate or modify code from a natural-language utterance. The dispatcher
+    /// (ARSessionManager) decides whether this is a fresh generation or a
+    /// modification based on whether currentCode is empty.
+    case codegen(String)
+    /// Arm element-selection mode — the next preview-pointing tap selects an element.
+    case selectElement
+    /// Clear the currently selected element.
+    case deselectElement
+    /// Revert to the previous code state.
+    case undo
+    /// Create an empty file in the project tree.
+    case newFile(String)
+    /// Re-render the preview from current code.
+    case runPreview
+    /// Save (demo no-op — JARVIS just acknowledges).
+    case save
 }
 
 @MainActor
@@ -267,6 +285,41 @@ final class VoiceManager: ObservableObject {
         let lower = rawText.lowercased()
         guard !lower.isEmpty else { return nil }
 
+        // ----- Phase 2 single-purpose commands (must run BEFORE show/hide so e.g.
+        //       "save" doesn't fall through to a target lookup that finds nothing).
+
+        // SELECT / DESELECT
+        if lower == "select" || lower == "selected" || lower.hasSuffix(" select this")
+            || lower == "select this" {
+            return .selectElement
+        }
+        if lower == "deselect" || lower == "unselect" || lower == "clear selection" {
+            return .deselectElement
+        }
+
+        // UNDO
+        if lower == "undo" || lower.hasSuffix(" undo") || lower == "go back"
+            || lower == "revert" {
+            return .undo
+        }
+
+        // RUN
+        if lower == "run" || lower == "run it" || lower == "run preview"
+            || lower == "execute" {
+            return .runPreview
+        }
+
+        // SAVE
+        if lower == "save" || lower == "save it" || lower == "save file"
+            || lower == "save the file" {
+            return .save
+        }
+
+        // NEW FILE
+        if let name = extractNewFileName(from: lower) {
+            return .newFile(name)
+        }
+
         // ----- Single-purpose patterns first -----
 
         // CLEAR
@@ -328,8 +381,9 @@ final class VoiceManager: ObservableObject {
         }
 
         guard let ti = targetIndex else {
-            // No target word found — fall through to wake-word question detection below.
-            return parseWakeWordQuestion(rawText: rawText, lower: lower)
+            // No target word — try wake-word question, then fall through to codegen.
+            if let q = parseWakeWordQuestion(rawText: rawText, lower: lower) { return q }
+            return codegenFallback(rawText: rawText, lower: lower)
         }
 
         // 2) Look back from ti-1 up to 6 words for the most recent action keyword.
@@ -355,7 +409,8 @@ final class VoiceManager: ObservableObject {
         }
 
         guard let action = action else {
-            return parseWakeWordQuestion(rawText: rawText, lower: lower)
+            if let q = parseWakeWordQuestion(rawText: rawText, lower: lower) { return q }
+            return codegenFallback(rawText: rawText, lower: lower)
         }
 
         switch action {
@@ -374,6 +429,39 @@ final class VoiceManager: ObservableObject {
             let trimmed = String(rawText.dropFirst(stripped.count))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { return .ask(trimmed) }
+        }
+        return nil
+    }
+
+    /// Phase 2 catch-all. Any utterance with at least 3 letters that didn't match a
+    /// known command is treated as a Gemini codegen / modify request. Below 3 letters
+    /// is almost always a misfire ("uh", "ok", "no") and we drop it.
+    private static func codegenFallback(rawText: String, lower: String) -> VoiceCommand? {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let letters = trimmed.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+        guard letters.count >= 3 else { return nil }
+        return .codegen(trimmed)
+    }
+
+    /// Detect "new file <name>" / "create a new file called <name>" patterns.
+    private static func extractNewFileName(from lower: String) -> String? {
+        let triggers = [
+            "new file ",
+            "create a new file called ",
+            "create a new file named ",
+            "create a file called ",
+            "create a file named ",
+            "make a new file called ",
+            "add a new file called "
+        ]
+        for trigger in triggers {
+            if let range = lower.range(of: trigger) {
+                let suffix = lower[range.upperBound...]
+                let name = suffix.split(whereSeparator: { c in
+                    !c.isLetter && !c.isNumber && c != "." && c != "_" && c != "-"
+                }).first.map(String.init)
+                if let name = name, !name.isEmpty { return name }
+            }
         }
         return nil
     }
