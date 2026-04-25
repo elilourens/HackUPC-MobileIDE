@@ -764,6 +764,10 @@ final class PanelManager {
         // UI accents — neutral light grey instead of blue per art direction
         static let accentBlue  = UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 1) // #A8ADB3
         static let accentGreen = UIColor(red:  89/255, green: 168/255, blue: 105/255, alpha: 1) // #59A869
+        /// Junie's brand green — used for the sparkle glyph + JUNIE wordmark in
+        /// the assistant/terminal panel so the panel reads as the actual JB
+        /// product, not a generic grey copy.
+        static let junieGreen  = UIColor(red:  95/255, green: 184/255, blue: 101/255, alpha: 1) // #5FB865
         static let accentRed   = UIColor(red: 199/255, green:  84/255, blue:  80/255, alpha: 1)
         // Text
         static let textActive  = UIColor(red: 188/255, green: 190/255, blue: 196/255, alpha: 1) // #BCBEC4
@@ -875,6 +879,74 @@ final class PanelManager {
         ctx.move(to: CGPoint(x: center.x + h, y: center.y - h))
         ctx.addLine(to: CGPoint(x: center.x - h, y: center.y + h))
         ctx.strokePath()
+    }
+
+    /// JetBrains-style window header for the editor panel: ArcReact gradient
+    /// sticker on the left, "ArcReact" wordmark, separator, and the active
+    /// filename on the right. Mirrors the WebStorm / PyCharm / IntelliJ window
+    /// title rail so the panel reads as a real JB product.
+    private func drawArcReactTitlebar(_ ctx: CGContext, rect: CGRect, filename: String) {
+        // Faint background tint distinct from the editor body.
+        UIColor(red: 30/255, green: 31/255, blue: 34/255, alpha: 0.85).setFill()
+        UIBezierPath(roundedRect: rect, cornerRadius: 6).fill()
+        // Hairline bottom border.
+        ctx.setStrokeColor(JB.border.cgColor)
+        ctx.setLineWidth(0.6)
+        ctx.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        ctx.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        ctx.strokePath()
+
+        // Sticker — JetBrains-style rounded gradient square (cyan→teal→indigo
+        // for ArcReact, matching the StarterPage splash).
+        let stickerSize = rect.height * 0.62
+        let stickerRect = CGRect(x: rect.minX + 10,
+                                 y: rect.midY - stickerSize / 2,
+                                 width: stickerSize, height: stickerSize)
+        let stickerPath = UIBezierPath(roundedRect: stickerRect, cornerRadius: stickerSize * 0.16)
+        ctx.saveGState()
+        stickerPath.addClip()
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let stops: [CGFloat] = [0.0, 0.55, 1.0]
+        let colors = [
+            UIColor(red:  28/255, green: 196/255, blue: 184/255, alpha: 1).cgColor,
+            UIColor(red:  79/255, green: 124/255, blue: 255/255, alpha: 1).cgColor,
+            UIColor(red: 124/255, green:  92/255, blue: 255/255, alpha: 1).cgColor,
+        ]
+        if let g = CGGradient(colorsSpace: cs, colors: colors as CFArray, locations: stops) {
+            ctx.drawLinearGradient(g,
+                                   start: CGPoint(x: stickerRect.minX, y: stickerRect.minY),
+                                   end:   CGPoint(x: stickerRect.maxX, y: stickerRect.maxY),
+                                   options: [])
+        }
+        ctx.restoreGState()
+        // "AR" monogram on the sticker.
+        let monoFont = UIFont.systemFont(ofSize: stickerSize * 0.42, weight: .heavy)
+        let monoStr = NSAttributedString(string: "AR", attributes: [
+            .font: monoFont,
+            .foregroundColor: UIColor.white,
+            .kern: -0.5
+        ])
+        let monoSize = monoStr.size()
+        monoStr.draw(at: CGPoint(x: stickerRect.midX - monoSize.width / 2,
+                                 y: stickerRect.midY - monoSize.height / 2 - 0.5))
+
+        // Wordmark + filename row.
+        let wordmark = NSAttributedString(string: "ArcReact", attributes: [
+            .font: UIFont.systemFont(ofSize: rect.height * 0.40, weight: .semibold),
+            .foregroundColor: JB.textActive,
+            .kern: -0.1
+        ])
+        let wordmarkSize = wordmark.size()
+        let textY = rect.midY - wordmarkSize.height / 2
+        wordmark.draw(at: CGPoint(x: stickerRect.maxX + 10, y: textY))
+
+        // " · filename"
+        let filenamePart = NSAttributedString(string: " · \(filename)", attributes: [
+            .font: UIFont.systemFont(ofSize: rect.height * 0.36, weight: .regular),
+            .foregroundColor: JB.textInactive
+        ])
+        filenamePart.draw(at: CGPoint(x: stickerRect.maxX + 10 + wordmarkSize.width,
+                                       y: textY + 1))
     }
 
     /// IntelliJ-style status bar across the bottom of the editor panel.
@@ -1041,12 +1113,20 @@ final class PanelManager {
         let outerPad = max(16, min(size.width, size.height) * 0.028)
         // Reserve a thin status bar at the bottom (IntelliJ-style).
         let statusBarHeight: CGFloat = max(22, size.height * 0.045)
+        // Reserve a titlebar at the top — JetBrains-window look with ArcReact
+        // gradient sticker + "ArcReact" wordmark + active filename.
+        let titlebarHeight: CGFloat = max(28, size.height * 0.058)
+        drawArcReactTitlebar(ctx,
+                             rect: CGRect(x: outerPad, y: outerPad + 2,
+                                          width: size.width - outerPad * 2,
+                                          height: titlebarHeight),
+                             filename: liveActiveFile ?? "index.html")
 
         // Layout: left sidebar (~24% width) | separator | code area
         let sidebarWidth = (size.width - outerPad * 2) * 0.24
         let separatorX = outerPad + sidebarWidth + 12
         let codeAreaLeft = separatorX + 12
-        let workTop = outerPad + 6
+        let workTop = outerPad + titlebarHeight + 10
         let workBottom = size.height - statusBarHeight - 6
 
         // ---- Sidebar (project view) ----------------------------------------
@@ -1745,30 +1825,32 @@ final class PanelManager {
         let badgeFont = UIFont.monospacedSystemFont(ofSize: badgeFontSize, weight: .regular)
         let bodyFont = UIFont.monospacedSystemFont(ofSize: bodyFontSize, weight: .regular)
 
-        let promptColor  = JB.accentBlue
+        let promptColor  = JB.junieGreen
         let infoColor    = JB.textActive
         let successGreen = JB.accentGreen
         let errorRed     = JB.accentRed
         let outputDim    = JB.textInactive
 
-        // ---- Header row: sparkle + JUNIE + model badge --------------------
+        // ---- Header row: green Junie sparkle + Junie wordmark + by JetBrains --
         var y: CGFloat = pad + 6
         let sparkleR: CGFloat = headerFontSize * 0.46
         let sparkleCenter = CGPoint(x: pad + 18 + sparkleR, y: y + sparkleR + 2)
-        drawGeminiSparkle(ctx, center: sparkleCenter, radius: sparkleR, color: JB.accentBlue)
+        drawGeminiSparkle(ctx, center: sparkleCenter, radius: sparkleR, color: JB.junieGreen)
 
         let titleX = sparkleCenter.x + sparkleR + 14
-        NSAttributedString(string: "JUNIE", attributes: [
-            .font: headerFont,
+        // Lowercase wordmark — matches the actual Junie product mark.
+        NSAttributedString(string: "junie", attributes: [
+            .font: UIFont.systemFont(ofSize: headerFontSize, weight: .semibold),
             .foregroundColor: JB.textActive,
-            .kern: 4.0
+            .kern: 0.5
         ]).draw(at: CGPoint(x: titleX, y: y))
 
-        // Model badge (right-aligned). Branded as Junie — JetBrains' AI assistant.
-        let modelBadge = NSAttributedString(string: "junie · 2025.3", attributes: [
+        // Tagline badge (right-aligned). Reads as a JetBrains product, not a
+        // generic terminal — "by JetBrains" + product version.
+        let modelBadge = NSAttributedString(string: "by JetBrains · 2026.1", attributes: [
             .font: badgeFont,
             .foregroundColor: JB.textInactive,
-            .kern: 1.2
+            .kern: 1.0
         ])
         let badgeWidth = modelBadge.size().width
         let badgeRect = CGRect(

@@ -31,6 +31,10 @@ enum VoiceCommand: Equatable {
     /// (ARSessionManager) decides whether this is a fresh generation or a
     /// modification based on whether currentCode is empty.
     case codegen(String)
+    /// User said "yes / confirm / go ahead" — proceed with the pending Junie plan.
+    case confirm
+    /// User said "no / cancel / stop" — discard the pending Junie plan.
+    case cancel
     /// Arm element-selection mode — the next preview-pointing tap selects an element.
     case selectElement
     /// Clear the currently selected element.
@@ -287,6 +291,21 @@ final class VoiceManager: ObservableObject {
 
         // ----- Phase 2 single-purpose commands (must run BEFORE show/hide so e.g.
         //       "save" doesn't fall through to a target lookup that finds nothing).
+
+        // CONFIRM / CANCEL — used to greenlight or kill a pending Junie plan
+        // before any code is written. Must run before generic codegen fallback
+        // so "yes" / "no" don't get parsed as natural-language prompts.
+        if lower == "yes" || lower == "yeah" || lower == "yep"
+            || lower == "confirm" || lower == "confirmed"
+            || lower == "go" || lower == "go ahead" || lower == "do it"
+            || lower == "build it" || lower == "ship it" || lower == "approved" {
+            return .confirm
+        }
+        if lower == "no" || lower == "nope" || lower == "cancel"
+            || lower == "stop" || lower == "abort" || lower == "discard"
+            || lower == "never mind" || lower == "scratch that" {
+            return .cancel
+        }
 
         // SELECT / DESELECT
         if lower == "select" || lower == "selected" || lower.hasSuffix(" select this")

@@ -139,6 +139,20 @@ struct WorkspaceHUD: View {
                 .allowsHitTesting(true)
             }
 
+            // Junie execution-plan overlay — appears the moment a plan lands and
+            // dismisses on confirm/cancel. Voice commands ("yes" / "no") flow
+            // through ARSessionManager.handleVoiceCommand, which mutates the
+            // pendingPlan published state, so the overlay reacts automatically.
+            if let plan = sessionManager.session.pendingPlan {
+                PlanHUDOverlay(
+                    plan: plan,
+                    onConfirm: { sessionManager.confirmPendingPlan() },
+                    onCancel:  { sessionManager.cancelPendingPlan() }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(60)
+            }
+
             // Corner-resize handles for the currently selected panel.
             ForEach(Array(sessionManager.selectedPanelCorners.enumerated()), id: \.offset) { idx, point in
                 CornerHandle(corner: idx)

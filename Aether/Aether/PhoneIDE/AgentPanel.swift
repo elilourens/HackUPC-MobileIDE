@@ -17,10 +17,22 @@ struct AgentPanel: View {
             header
             if !collapsed {
                 chatScroll
+                if let plan = session.pendingPlan {
+                    PlanHUDOverlay(
+                        plan: plan,
+                        onConfirm: confirmPlan,
+                        onCancel: cancelPlan,
+                        style: .compact
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .transition(.opacity)
+                }
                 inputBar
             }
         }
         .background(IJ.bgSidebar)
+        .animation(.easeOut(duration: 0.18), value: session.pendingPlan != nil)
     }
 
     // MARK: Header
@@ -155,20 +167,43 @@ struct AgentPanel: View {
     private func send() {
         let prompt = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
+        guard session.pendingPlan == nil else { return }   // ignore typing while a plan is awaiting confirm
         draft = ""
         inputFocused = false
         if sttActive { sttRecognizer.stop { _ in }; sttActive = false }
 
         session.appendChat(.user, prompt)
-        // Capture the placeholder's id so we can replace exactly this message
-        // when the backend returns — overlapping prompts no longer overwrite
-        // each other's "thinking…" lines.
-        let placeholderId = session.appendChat(.assistant, "thinking…")
-        session.isGenerating = true
-
-        // The JB splash counts as "no user code yet" — first prompt should be
-        // a fresh generation, not a modify-the-splash call.
+        let placeholderId = session.appendChat(.assistant, "planning…")
+        session.isPlanning = true
         let isModification = session.hasUserCode
+        session.pendingPlanIsModification = isModification
+
+        BackendClient.shared.plan(prompt: prompt,
+                                  currentCode: isModification ? session.currentCode : nil,
+                                  session: session) { result in
+            DispatchQueue.main.async {
+                session.isPlanning = false
+                switch result {
+                case .success(let plan):
+                    session.pendingPlan = plan
+                    session.replaceMessage(id: placeholderId, with: plan.summary)
+                case .failure(let err):
+                    session.pendingPlanIsModification = false
+                    session.replaceMessage(id: placeholderId,
+                                           with: "Planning failed: \(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func confirmPlan() {
+        guard let plan = session.pendingPlan else { return }
+        let isModification = session.pendingPlanIsModification
+        session.pendingPlan = nil
+        session.pendingPlanIsModification = false
+        session.isGenerating = true
+        let placeholderId = session.appendChat(.assistant, "building…")
+
         let onResult: (Result<String, Error>) -> Void = { result in
             DispatchQueue.main.async {
                 session.isGenerating = false
@@ -183,16 +218,25 @@ struct AgentPanel: View {
                             : "Created \(session.currentFile). Tap Preview to see it.")
                 case .failure(let err):
                     session.replaceMessage(id: placeholderId,
-                                           with: "Failed: \(err.localizedDescription)")
+                                           with: "Build failed: \(err.localizedDescription)")
                 }
             }
         }
+
         if isModification {
-            BackendClient.shared.modify(prompt: prompt, currentCode: session.currentCode,
+            BackendClient.shared.modify(prompt: plan.expandedPrompt,
+                                        currentCode: session.currentCode,
                                         session: session, completion: onResult)
         } else {
-            BackendClient.shared.generate(prompt: prompt, session: session, completion: onResult)
+            BackendClient.shared.generate(prompt: plan.expandedPrompt,
+                                          session: session, completion: onResult)
         }
+    }
+
+    private func cancelPlan() {
+        session.pendingPlan = nil
+        session.pendingPlanIsModification = false
+        session.appendChat(.assistant, "Cancelled.")
     }
 }
 

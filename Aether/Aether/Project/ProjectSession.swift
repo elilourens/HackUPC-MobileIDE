@@ -60,6 +60,16 @@ final class ProjectSession: ObservableObject {
     /// first user prompt is a fresh generation, not a modify-the-splash call.
     @Published private(set) var isSeededDemoContent: Bool = false
 
+    /// In-flight Junie execution plan awaiting user confirmation. Surfaced to
+    /// both the AR HUD overlay and the phone agent panel. Set by the codegen
+    /// pipeline after `/api/plan`; cleared by `confirmPlan` / `cancelPlan`.
+    @Published var pendingPlan: BackendClient.PlanPayload?
+    /// True while `/api/plan` is in flight (used to show a HUD spinner).
+    @Published var isPlanning: Bool = false
+    /// Whether the latest plan was for a modification (vs a fresh generation).
+    /// Determines which endpoint runs once the user confirms.
+    @Published var pendingPlanIsModification: Bool = false
+
     /// Stack of (file, code) pairs pushed before each modification so undo can restore.
     private var history: [(file: String, code: String)] = []
 

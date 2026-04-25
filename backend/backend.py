@@ -17,7 +17,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from aether_voice.tts import synthesize_speech
 from ghost.assistant import generate_conversation_reply, generate_ghost_reply
@@ -39,21 +39,48 @@ GHOST_REPLY_VOICE_ID = "lUTamkMw7gOzZbFIwmq4"
 
 EMBEDDING_MODEL = "text-embedding-3-large"
 VISION_MODEL = "gpt-4o"
+BUILD_MODEL = "gpt-5.4"
 DB_NAME = "mobileide"
 COLLECTION = "images"
+
+BUILD_SYSTEM_PROMPT = """You are a world-class frontend developer at Vercel. Generate a single HTML file.
+
+MANDATORY in <head>:
+<script src=\"https://unpkg.com/react@18/umd/react.production.min.js\"></script>
+<script src=\"https://unpkg.com/react-dom@18/umd/react-dom.production.min.js\"></script>
+<script src=\"https://unpkg.com/@babel/standalone/babel.min.js\"></script>
+<script src=\"https://cdn.tailwindcss.com\"></script>
+<link href=\"https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap\" rel=\"stylesheet\">
+
+<script> tailwind.config = { theme: { extend: { fontFamily: { sans: ['DM Sans', 'sans-serif'] }}}} </script>
+
+Write React components inside <script type=\"text/babel\">.
+Use Tailwind classes for ALL styling. No inline styles.
+Render into <div id=\"root\">.
+
+DESIGN RULES:
+- Dark theme: bg-neutral-950 body, bg-neutral-900 cards
+- Accent: ONE color only. blue-500 or emerald-500 or orange-500. Pick one per project.
+- Text: text-neutral-50 headings, text-neutral-400 body
+- Cards: rounded-2xl border border-neutral-800 p-8
+- Spacing: generous. py-24 sections, gap-8 grids
+- Typography: text-5xl font-bold tracking-tight headings
+- Max width: max-w-6xl mx-auto px-6
+- Hover states on buttons and links
+- Use real images from unsplash where appropriate:
+  https://images.unsplash.com/photo-{ID}?w=800&h=600&fit=crop
+- Make it look like linear.app or vercel.com quality
+- NO gradients. NO neon. NO borders thicker than 1px.
+- NO generic placeholder text. Write real compelling copy.
+
+Return ONLY raw HTML. No markdown. No backticks. No explanation. No comments."""
 
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "null",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -92,6 +119,53 @@ class SearchResult(BaseModel):
     filename: str
     description: str
     score: float
+
+
+class BuildRequest(BaseModel):
+    prompt: str
+
+
+class ModifyRequest(BaseModel):
+    prompt: str
+    current_code: str
+
+
+class ElementContext(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    tag: Optional[str] = None
+    class_: Optional[str] = Field(default=None, alias="class")
+    text: Optional[str] = None
+
+
+class ModifyElementRequest(BaseModel):
+    prompt: str
+    current_code: str
+    element: ElementContext
+
+
+class BuildResponse(BaseModel):
+    html: str
+    success: bool
+
+
+class PlanRequest(BaseModel):
+    prompt: str
+    current_code: Optional[str] = None
+
+
+class PlanStep(BaseModel):
+    index: int
+    action: str          # short verb phrase, e.g. "Create hero section"
+    target: str          # path or component, e.g. "index.html · <header>"
+    why: str             # one sentence reasoning
+
+
+class PlanResponse(BaseModel):
+    summary: str             # 1-2 sentences for JARVIS to speak
+    steps: list[PlanStep]    # ordered execution plan
+    expanded_prompt: str     # detailed brief that /api/build will receive once confirmed
+    success: bool
 
 
 def _to_bool(value: Optional[Union[str, bool]], default: bool) -> bool:
@@ -463,6 +537,173 @@ async def get_image(image_id: str):
         content=bytes(doc["image_data"]),
         media_type=doc["content_type"],
     )
+
+
+def _strip_html_fence(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        first_newline = stripped.find("\n")
+        if first_newline != -1:
+            stripped = stripped[first_newline + 1 :]
+        if stripped.endswith("```"):
+            stripped = stripped[: -3]
+    return stripped.strip()
+
+
+def _generate_html(messages: list[dict]) -> str:
+    client = _require_openai()
+    response = client.chat.completions.create(
+        model=BUILD_MODEL,
+        messages=messages,
+    )
+    raw = response.choices[0].message.content or ""
+    return _strip_html_fence(raw)
+
+
+PLANNER_SYSTEM_PROMPT = """You are the Junie planner inside ArcReact, a JetBrains AR-native IDE. The user has spoken or typed a request. Before any code is written, you produce a tight execution plan that JARVIS will read aloud and the user must confirm.
+
+Return ONLY a single JSON object — no markdown, no prose, no fences. Schema:
+
+{
+  "summary": "1–2 sentences. Plain English. What you'll build, in concrete terms. JARVIS speaks this verbatim.",
+  "steps": [
+    { "index": 1, "action": "<short verb phrase>", "target": "<file or component>", "why": "<one sentence>" },
+    ...
+  ],
+  "expanded_prompt": "A detailed brief that /api/build will receive after the user confirms. This is the HIDDEN prompt — write it like a senior PM handing a task to an LLM. Include: (a) the user's literal intent restated, (b) section breakdown with content tone, (c) layout & component breakdown, (d) accent color (one of blue-500 / emerald-500 / orange-500 — pick what fits the request), (e) imagery suggestions (Unsplash topic keywords), (f) typography mood (one Google Font from: DM Sans, Plus Jakarta Sans, Sora, Outfit, Manrope), (g) any specific micro-interactions or animations that would elevate it. End with: 'Render as a single self-contained HTML file using React 18 + Tailwind via CDN per the build system rules.'"
+}
+
+Plan rules:
+- 3 to 6 steps. Each step is a concrete action a coder would take.
+- target should look like a path: "index.html · hero", "index.html · pricing-grid", "components/CTA".
+- The summary must be honest about what the page will be — don't oversell.
+- expanded_prompt must be 4–10 sentences and READS LIKE A REAL CREATIVE BRIEF, not bullet points.
+
+If the user is asking for a modification (current_code provided), the plan is the diff: which sections change, what stays. The expanded_prompt then ends with: 'Apply the change to the existing HTML; preserve everything not affected.'"""
+
+
+@app.post("/api/plan", response_model=PlanResponse)
+def api_plan(payload: PlanRequest) -> PlanResponse:
+    if not payload.prompt.strip():
+        raise HTTPException(400, "prompt cannot be empty")
+
+    client = _require_openai()
+    user_block = f"User request: {payload.prompt.strip()}"
+    if payload.current_code and payload.current_code.strip():
+        # Truncate to keep planner fast — full code goes to /api/build later.
+        clipped = payload.current_code.strip()
+        if len(clipped) > 6000:
+            clipped = clipped[:6000] + "\n... [truncated]"
+        user_block += f"\n\nExisting HTML (truncated for planning):\n{clipped}"
+
+    response = client.chat.completions.create(
+        model=BUILD_MODEL,
+        messages=[
+            {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+            {"role": "user", "content": user_block},
+        ],
+        response_format={"type": "json_object"},
+    )
+    raw = response.choices[0].message.content or "{}"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(502, f"planner returned invalid JSON: {exc}") from exc
+
+    summary = (data.get("summary") or "").strip()
+    expanded = (data.get("expanded_prompt") or "").strip()
+    if not summary or not expanded:
+        raise HTTPException(502, "planner response missing summary or expanded_prompt")
+
+    raw_steps = data.get("steps") or []
+    steps: list[PlanStep] = []
+    for idx, item in enumerate(raw_steps, start=1):
+        if not isinstance(item, dict):
+            continue
+        steps.append(
+            PlanStep(
+                index=int(item.get("index", idx)),
+                action=str(item.get("action", "")).strip() or "Edit",
+                target=str(item.get("target", "")).strip() or "index.html",
+                why=str(item.get("why", "")).strip(),
+            )
+        )
+
+    return PlanResponse(
+        summary=summary,
+        steps=steps,
+        expanded_prompt=expanded,
+        success=True,
+    )
+
+
+@app.post("/api/build", response_model=BuildResponse)
+def api_build(payload: BuildRequest) -> BuildResponse:
+    if not payload.prompt.strip():
+        raise HTTPException(400, "prompt cannot be empty")
+
+    html = _generate_html(
+        [
+            {"role": "system", "content": BUILD_SYSTEM_PROMPT},
+            {"role": "user", "content": payload.prompt},
+        ]
+    )
+    return BuildResponse(html=html, success=True)
+
+
+@app.post("/api/modify", response_model=BuildResponse)
+def api_modify(payload: ModifyRequest) -> BuildResponse:
+    if not payload.prompt.strip():
+        raise HTTPException(400, "prompt cannot be empty")
+    if not payload.current_code.strip():
+        raise HTTPException(400, "current_code cannot be empty")
+
+    user_content = (
+        f"Modification request: {payload.prompt}\n\n"
+        f"Current HTML:\n{payload.current_code}\n\n"
+        "Return the complete modified HTML file. Preserve everything not affected by the request."
+    )
+
+    html = _generate_html(
+        [
+            {"role": "system", "content": BUILD_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ]
+    )
+    return BuildResponse(html=html, success=True)
+
+
+@app.post("/api/modify-element", response_model=BuildResponse)
+def api_modify_element(payload: ModifyElementRequest) -> BuildResponse:
+    if not payload.prompt.strip():
+        raise HTTPException(400, "prompt cannot be empty")
+    if not payload.current_code.strip():
+        raise HTTPException(400, "current_code cannot be empty")
+
+    element_lines = []
+    if payload.element.tag:
+        element_lines.append(f"tag: {payload.element.tag}")
+    if payload.element.class_:
+        element_lines.append(f"class: {payload.element.class_}")
+    if payload.element.text:
+        element_lines.append(f"text: {payload.element.text}")
+    element_block = "\n".join(element_lines) if element_lines else "(no element metadata provided)"
+
+    user_content = (
+        f"Modify ONLY the specific element described below. Leave every other element exactly as it is.\n\n"
+        f"Target element:\n{element_block}\n\n"
+        f"Modification request: {payload.prompt}\n\n"
+        f"Current HTML:\n{payload.current_code}\n\n"
+        "Return the complete modified HTML file."
+    )
+
+    html = _generate_html(
+        [
+            {"role": "system", "content": BUILD_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ]
+    )
+    return BuildResponse(html=html, success=True)
 
 
 @app.delete("/images/{image_id}")

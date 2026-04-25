@@ -433,6 +433,22 @@ final class ARSessionManager: NSObject, ObservableObject {
     private func handleSwipe(direction: SwipeDirection) {
         guard let pm = panelManager else { return }
 
+        // Tony-Stark "fling aside": open palm (5 fingers extended) + horizontal
+        // swipe over a panel hides that panel. The gesture must still be
+        // .openPalm at swipe time — it can't be the leftover state from a
+        // pinch-grab. Triggers on left OR right; the closest panel to the
+        // current wrist is what gets dismissed.
+        if currentGesture == .openPalm,
+           (direction == .left || direction == .right) {
+            let panelToHide = lastPointingPanel
+                ?? (lastWristNormalized.flatMap { closestPanelToScreenPoint($0) })
+            if let panel = panelToHide {
+                pm.hidePanel(panel)
+                JarvisVoice.shared.speak("Dismissed.")
+                return
+            }
+        }
+
         // Vertical swipes scroll the preview when the user is (or recently was)
         // pointing at it — otherwise they scroll the editor. The "recently"
         // window catches the common case where the user finishes pointing and
@@ -525,92 +541,11 @@ final class ARSessionManager: NSObject, ObservableObject {
         }
         switch command {
         case .codegen(let prompt):
-            if !session.hasUserCode {
-                // Fresh generation (currentCode either empty OR still the splash seed)
-                session.isGenerating = true
-                JarvisVoice.shared.speak("On it sir.")
-                // Gemini-CLI-style log: echo the user's prompt, then a thinking
-                // status line. (Trim the prompt to keep terminal layout sane.)
-                let trimmed = prompt.count > 64 ? String(prompt.prefix(64)) + "…" : prompt
-                appendTerminalLog(.command, trimmed)
-                appendTerminalLog(.info, "thinking…")
-                let startTime = CACurrentMediaTime()
-                // Don't show the preview yet — defer until the code lands so it
-                // can fly in (materialize) at the same moment as the rendered page.
-                BackendClient.shared.generate(prompt: prompt, session: session) { [weak self] result in
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self else { return }
-                        switch result {
-                        case .success(let code):
-                            self.session.setCode(code, forFile: "index.html", pushHistory: false)
-                            // Layout shifts FIRST so the editor + tree start sliding aside
-                            // while the preview is conjuring itself.
-                            self.panelManager?.enterLiveIDEMode()
-                            self.panelManager?.materializePreview()
-                            self.panelManager?.setEditorCode(code, animated: true)
-                            self.panelManager?.setLiveFiles(active: "index.html", files: Array(self.session.projectFiles.keys).sorted())
-                            let lineCount = code.split(separator: "\n").count
-                            let elapsed = CACurrentMediaTime() - startTime
-                            self.appendTerminalLog(.success, "generated \(lineCount) lines · \(String(format: "%.1f", elapsed))s")
-                            self.loadAndApplyPreview(code: code, settleDelay: 0.6) {
-                                JarvisVoice.shared.speak("Preview is live.")
-                                self.appendTerminalLog(.success, "preview live")
-                            }
-                            self.session.isGenerating = false
-                        case .failure:
-                            JarvisVoice.shared.speak("Generation failed, sir.")
-                            self.appendTerminalLog(.error, "generation failed")
-                            self.session.isGenerating = false
-                        }
-                    }
-                }
-            } else {
-                // Modification
-                JarvisVoice.shared.speak("Updating.")
-                let trimmed = prompt.count > 64 ? String(prompt.prefix(64)) + "…" : prompt
-                appendTerminalLog(.command, trimmed)
-                appendTerminalLog(.info, "thinking…")
-                let startTime = CACurrentMediaTime()
-                let onModifyDone: (Result<String, Error>) -> Void = { [weak self] result in
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self else { return }
-                        switch result {
-                        case .success(let newCode):
-                            self.session.setCode(newCode, forFile: self.session.currentFile, pushHistory: true)
-                            self.panelManager?.setEditorCode(newCode, animated: false)
-                            if self.session.selectedElement != nil {
-                                self.session.setSelectedElement(nil)
-                                self.previewRenderer.clearSelection { [weak self] image in
-                                    self?.panelManager?.setPreviewImage(image)
-                                }
-                            }
-                            let elapsed = CACurrentMediaTime() - startTime
-                            self.appendTerminalLog(.success, "updated · \(String(format: "%.1f", elapsed))s")
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                                guard let self = self else { return }
-                                self.loadAndApplyPreview(code: newCode, settleDelay: 0.3) {
-                                    JarvisVoice.shared.speak("Done.")
-                                }
-                            }
-                        case .failure:
-                            JarvisVoice.shared.speak("Modification failed.")
-                            self.appendTerminalLog(.error, "modification failed")
-                        }
-                    }
-                }
-                if let element = session.selectedElement {
-                    BackendClient.shared.modifyElement(prompt: prompt,
-                                                       currentCode: session.currentCode,
-                                                       element: element,
-                                                       session: session,
-                                                       completion: onModifyDone)
-                } else {
-                    BackendClient.shared.modify(prompt: prompt,
-                                                currentCode: session.currentCode,
-                                                session: session,
-                                                completion: onModifyDone)
-                }
-            }
+            startPlanning(prompt: prompt)
+        case .confirm:
+            confirmPendingPlan()
+        case .cancel:
+            cancelPendingPlan()
         case .selectElement:
             selectionArmed = true
             JarvisVoice.shared.speak("Tap on the preview to select.")
@@ -755,6 +690,123 @@ final class ARSessionManager: NSObject, ObservableObject {
     /// Idempotent. Called by the "Let's start" overlay tap, and as a safety
     /// net at the top of handleVoiceCommand so a voice-first user is never
     /// stuck on an empty desk.
+    // MARK: - Plan / confirm / cancel pipeline
+    //
+    // The user's prompt now goes through a two-stage flow:
+    //   1) `/api/plan` returns a summary + structured steps + an expanded
+    //      hidden prompt. JARVIS reads the summary aloud, the AR plan overlay
+    //      shows the steps, and the chat surfaces the same in the agent panel.
+    //   2) The user says "yes / confirm" (or taps Confirm on the phone) →
+    //      `/api/build` runs against the EXPANDED prompt, not the raw one.
+    //      "no / cancel" discards the plan and frees Junie up.
+
+    func startPlanning(prompt: String) {
+        // Don't start a new plan if one is already pending awaiting confirmation.
+        if session.pendingPlan != nil { return }
+        let isModification = session.hasUserCode
+        let trimmed = prompt.count > 64 ? String(prompt.prefix(64)) + "…" : prompt
+        appendTerminalLog(.command, trimmed)
+        appendTerminalLog(.info, "planning…")
+        session.isPlanning = true
+        session.pendingPlanIsModification = isModification
+        JarvisVoice.shared.speak("Working on a plan, sir.")
+
+        BackendClient.shared.plan(prompt: prompt,
+                                  currentCode: isModification ? session.currentCode : nil,
+                                  session: session) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.session.isPlanning = false
+                switch result {
+                case .success(let plan):
+                    self.session.pendingPlan = plan
+                    self.appendTerminalLog(.success, "plan ready · \(plan.steps.count) steps")
+                    JarvisVoice.shared.speak(plan.summary)
+                    // Brief breath, then the prompt — keeps the summary readable
+                    // before "Shall I proceed?" stomps on it.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                        if self.session.pendingPlan != nil {
+                            JarvisVoice.shared.speak("Shall I proceed?")
+                        }
+                    }
+                case .failure(let err):
+                    self.session.pendingPlanIsModification = false
+                    JarvisVoice.shared.speak("Planning failed, sir.")
+                    self.appendTerminalLog(.error, "plan failed: \(err.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func confirmPendingPlan() {
+        guard let plan = session.pendingPlan else { return }
+        let isModification = session.pendingPlanIsModification
+        session.pendingPlan = nil
+        session.pendingPlanIsModification = false
+        session.isGenerating = true
+        appendTerminalLog(.info, "executing plan…")
+        JarvisVoice.shared.speak("On it.")
+        let startTime = CACurrentMediaTime()
+
+        let onResult: (Result<String, Error>) -> Void = { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.session.isGenerating = false
+                switch result {
+                case .success(let code):
+                    let pushHistory = isModification
+                    self.session.setCode(code,
+                                         forFile: self.session.currentFile.isEmpty ? "index.html" : self.session.currentFile,
+                                         pushHistory: pushHistory)
+                    if !isModification {
+                        self.panelManager?.enterLiveIDEMode()
+                        self.panelManager?.materializePreview()
+                    }
+                    self.panelManager?.setEditorCode(code, animated: !isModification)
+                    self.panelManager?.setLiveFiles(active: self.session.currentFile,
+                                                    files: Array(self.session.projectFiles.keys).sorted())
+                    let elapsed = CACurrentMediaTime() - startTime
+                    self.appendTerminalLog(.success,
+                                           "\(isModification ? "updated" : "generated") · \(String(format: "%.1f", elapsed))s")
+                    self.loadAndApplyPreview(code: code, settleDelay: isModification ? 0.3 : 0.6) {
+                        JarvisVoice.shared.speak(isModification ? "Done." : "Preview is live.")
+                        self.appendTerminalLog(.success, "preview live")
+                    }
+                case .failure(let err):
+                    JarvisVoice.shared.speak("Execution failed, sir.")
+                    self.appendTerminalLog(.error, "execution failed: \(err.localizedDescription)")
+                }
+            }
+        }
+
+        if isModification {
+            if let element = session.selectedElement {
+                BackendClient.shared.modifyElement(prompt: plan.expandedPrompt,
+                                                   currentCode: session.currentCode,
+                                                   element: element,
+                                                   session: session,
+                                                   completion: onResult)
+            } else {
+                BackendClient.shared.modify(prompt: plan.expandedPrompt,
+                                            currentCode: session.currentCode,
+                                            session: session,
+                                            completion: onResult)
+            }
+        } else {
+            BackendClient.shared.generate(prompt: plan.expandedPrompt,
+                                          session: session,
+                                          completion: onResult)
+        }
+    }
+
+    func cancelPendingPlan() {
+        guard session.pendingPlan != nil else { return }
+        session.pendingPlan = nil
+        session.pendingPlanIsModification = false
+        appendTerminalLog(.info, "plan cancelled")
+        JarvisVoice.shared.speak("Cancelled.")
+    }
+
     /// Scroll the AR preview WebView and refresh the preview panel texture.
     /// Called by the HUD's preview-scroll arrow buttons. Positive `dy` scrolls down.
     func scrollPreview(dy: CGFloat) {

@@ -36,6 +36,8 @@
 		F200000000000000000000D7 /* GitHubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D7 /* GitHubClient.swift */; };
 		F200000000000000000000D8 /* ShakeDetectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D8 /* ShakeDetectorView.swift */; };
 		F200000000000000000000D9 /* StarterPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D9 /* StarterPage.swift */; };
+		F200000000000000000000DA /* PlanHUDOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DA /* PlanHUDOverlay.swift */; };
+		F200000000000000000000DB /* JBIcons in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DB /* JBIcons */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,6 +72,8 @@
 		F100000000000000000000D7 /* GitHubClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubClient.swift; sourceTree = "<group>"; };
 		F100000000000000000000D8 /* ShakeDetectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShakeDetectorView.swift; sourceTree = "<group>"; };
 		F100000000000000000000D9 /* StarterPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarterPage.swift; sourceTree = "<group>"; };
+		F100000000000000000000DA /* PlanHUDOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanHUDOverlay.swift; sourceTree = "<group>"; };
+		F100000000000000000000DB /* JBIcons */ = {isa = PBXFileReference; lastKnownFileType = folder; path = JBIcons; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -154,6 +158,7 @@
 				F100000000000000000000AA /* PlacementView.swift */,
 				F100000000000000000000AB /* WorkspaceHUD.swift */,
 				F100000000000000000000D8 /* ShakeDetectorView.swift */,
+				F100000000000000000000DA /* PlanHUDOverlay.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -162,6 +167,7 @@
 			isa = PBXGroup;
 			children = (
 				F100000000000000000000AC /* Assets.xcassets */,
+				F100000000000000000000DB /* JBIcons */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -267,6 +273,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F200000000000000000000AC /* Assets.xcassets in Resources */,
+				F200000000000000000000DB /* JBIcons in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -305,6 +312,7 @@
 				F200000000000000000000D7 /* GitHubClient.swift in Sources */,
 				F200000000000000000000D8 /* ShakeDetectorView.swift in Sources */,
 				F200000000000000000000D9 /* StarterPage.swift in Sources */,
+				F200000000000000000000DA /* PlanHUDOverlay.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
