@@ -55,6 +55,10 @@ final class ProjectSession: ObservableObject {
     @Published private(set) var openTabs: [String] = []
     @Published var selectedElement: ElementInfo?
     @Published var isGenerating: Bool = false
+    /// True while `index.html` still holds the JetBrains-style demo splash. Codegen
+    /// dispatch (phone IDE + AR voice) treats this as "no real code yet" so the
+    /// first user prompt is a fresh generation, not a modify-the-splash call.
+    @Published private(set) var isSeededDemoContent: Bool = false
 
     /// Stack of (file, code) pairs pushed before each modification so undo can restore.
     private var history: [(file: String, code: String)] = []
@@ -106,6 +110,15 @@ final class ProjectSession: ObservableObject {
     func seedStarterPageIfNeeded() {
         guard !hasAnyCode else { return }
         setCode(StarterPage.html, forFile: "index.html", pushHistory: false)
+        // Mark AFTER setCode (which would clear it) so codegen routing knows
+        // this buffer is the demo splash, not real user content.
+        isSeededDemoContent = true
+    }
+
+    /// True iff the editor genuinely contains user code (not just the splash).
+    /// Used by codegen dispatchers to pick generate vs modify.
+    var hasUserCode: Bool {
+        !currentCode.isEmpty && !isSeededDemoContent
     }
 
     // MARK: - Derived
@@ -131,6 +144,11 @@ final class ProjectSession: ObservableObject {
         projectFiles[file] = code
         currentFile = file
         ensureTabOpen(file)
+        // Any setCode that isn't the splash seed itself promotes the buffer to
+        // "real code", so codegen routing should treat further prompts as modify.
+        if isSeededDemoContent {
+            isSeededDemoContent = false
+        }
     }
 
     /// Pop the latest history entry into projectFiles. Returns the (file, code) restored,
@@ -197,18 +215,21 @@ final class ProjectSession: ObservableObject {
 
     // MARK: - Chat (phone IDE)
 
-    func appendChat(_ role: ChatMessage.Role, _ text: String) {
-        chatMessages.append(ChatMessage(role: role, text: text))
+    /// Append a new chat message and return its id so callers can later replace
+    /// it (used for "thinking…" placeholders that get swapped with the real
+    /// reply once the backend responds — replace-by-id avoids a race where
+    /// concurrent prompts overwrite each other's placeholders).
+    @discardableResult
+    func appendChat(_ role: ChatMessage.Role, _ text: String) -> UUID {
+        let msg = ChatMessage(role: role, text: text)
+        chatMessages.append(msg)
         if chatMessages.count > 200 { chatMessages.removeFirst(chatMessages.count - 200) }
+        return msg.id
     }
 
-    /// Replace the last assistant message text — used to swap "thinking…" with
-    /// the real reply once the backend responds.
-    func replaceLastAssistantMessage(with text: String) {
-        if let idx = chatMessages.lastIndex(where: { $0.role == .assistant }) {
-            chatMessages[idx].text = text
-        } else {
-            appendChat(.assistant, text)
-        }
+    /// Replace a specific message's text by id. No-op if the id isn't found.
+    func replaceMessage(id: UUID, with text: String) {
+        guard let idx = chatMessages.firstIndex(where: { $0.id == id }) else { return }
+        chatMessages[idx].text = text
     }
 }

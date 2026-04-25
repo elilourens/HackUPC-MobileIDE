@@ -525,8 +525,8 @@ final class ARSessionManager: NSObject, ObservableObject {
         }
         switch command {
         case .codegen(let prompt):
-            if session.currentCode.isEmpty {
-                // Fresh generation
+            if !session.hasUserCode {
+                // Fresh generation (currentCode either empty OR still the splash seed)
                 session.isGenerating = true
                 JarvisVoice.shared.speak("On it sir.")
                 // Gemini-CLI-style log: echo the user's prompt, then a thinking

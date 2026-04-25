@@ -160,23 +160,30 @@ struct AgentPanel: View {
         if sttActive { sttRecognizer.stop { _ in }; sttActive = false }
 
         session.appendChat(.user, prompt)
-        session.appendChat(.assistant, "thinking…")
+        // Capture the placeholder's id so we can replace exactly this message
+        // when the backend returns — overlapping prompts no longer overwrite
+        // each other's "thinking…" lines.
+        let placeholderId = session.appendChat(.assistant, "thinking…")
         session.isGenerating = true
 
-        let isModification = !session.currentCode.isEmpty
+        // The JB splash counts as "no user code yet" — first prompt should be
+        // a fresh generation, not a modify-the-splash call.
+        let isModification = session.hasUserCode
         let onResult: (Result<String, Error>) -> Void = { result in
             DispatchQueue.main.async {
                 session.isGenerating = false
                 switch result {
                 case .success(let html):
-                    session.setCode(html, forFile: session.currentFile.isEmpty ? "index.html" : session.currentFile,
+                    session.setCode(html,
+                                    forFile: session.currentFile.isEmpty ? "index.html" : session.currentFile,
                                     pushHistory: isModification)
-                    session.replaceLastAssistantMessage(with:
-                        isModification
+                    session.replaceMessage(id: placeholderId,
+                        with: isModification
                             ? "Updated \(session.currentFile)."
                             : "Created \(session.currentFile). Tap Preview to see it.")
                 case .failure(let err):
-                    session.replaceLastAssistantMessage(with: "Failed: \(err.localizedDescription)")
+                    session.replaceMessage(id: placeholderId,
+                                           with: "Failed: \(err.localizedDescription)")
                 }
             }
         }
