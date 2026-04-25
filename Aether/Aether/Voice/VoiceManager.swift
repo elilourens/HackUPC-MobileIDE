@@ -35,6 +35,8 @@ enum VoiceCommand: Equatable {
     case confirm
     /// User said "no / cancel / stop" — discard the pending Junie plan.
     case cancel
+    /// User said "skip step N" — drop step N from the pending plan and re-confirm.
+    case skipStep(Int)
     /// Arm element-selection mode — the next preview-pointing tap selects an element.
     case selectElement
     /// Clear the currently selected element.
@@ -305,6 +307,16 @@ final class VoiceManager: ObservableObject {
             || lower == "stop" || lower == "abort" || lower == "discard"
             || lower == "never mind" || lower == "scratch that" {
             return .cancel
+        }
+        // "skip step <N>" — recognize digits 1-9 plus written-out one..nine.
+        if lower.hasPrefix("skip step ") || lower.hasPrefix("skip ") {
+            let words = ["one":1,"two":2,"three":3,"four":4,"five":5,"six":6,"seven":7,"eight":8,"nine":9]
+            let trail = lower
+                .replacingOccurrences(of: "skip step ", with: "")
+                .replacingOccurrences(of: "skip ", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            if let n = Int(trail) { return .skipStep(n) }
+            if let n = words[trail] { return .skipStep(n) }
         }
 
         // SELECT / DESELECT

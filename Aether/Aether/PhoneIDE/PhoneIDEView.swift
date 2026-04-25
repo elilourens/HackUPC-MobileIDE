@@ -13,7 +13,8 @@ struct PhoneIDEView: View {
     @State private var showSettings = false
     @State private var showGitHubConnect = false
     @State private var showPreview = false
-    @State private var editorRatio: CGFloat = 0.62   // editor takes ~62% by default
+    @State private var showJunie = true       // right slide-in Junie tool window
+    @State private var editorRatio: CGFloat = 0.62   // editor takes ~62% by default when preview is split
     @State private var dragStartRatio: CGFloat = 0.62
 
     @State private var repoEntries: [GitHubClient.RepoEntry] = []
@@ -50,6 +51,10 @@ struct PhoneIDEView: View {
                     statusBar
                 }
                 .ignoresSafeArea(edges: .bottom)
+
+                junieRightPanel(height: geo.size.height)
+                    .animation(.easeOut(duration: 0.22), value: showJunie)
+                    .ignoresSafeArea(edges: .vertical)
 
                 FileTreeSidebar(
                     session: session,
@@ -198,11 +203,23 @@ struct PhoneIDEView: View {
                              icon: String? = nil,
                              sfSymbol: String? = nil,
                              junie: Bool = false) -> some View {
-        let active = selectedToolWindow == window
+        let isCurrentlyActive: Bool = {
+            switch window {
+            case .project: return sidebarShown
+            case .junie:   return showJunie
+            default:       return selectedToolWindow == window
+            }
+        }()
+        let active = isCurrentlyActive
         Button(action: {
             selectedToolWindow = window
-            if window == .project {
+            switch window {
+            case .project:
                 withAnimation(.easeOut(duration: 0.22)) { sidebarShown.toggle() }
+            case .junie:
+                withAnimation(.easeOut(duration: 0.22)) { showJunie.toggle() }
+            default:
+                break
             }
         }) {
             ZStack {
@@ -270,11 +287,20 @@ struct PhoneIDEView: View {
                     .font(.system(size: 12))
                     .foregroundColor(active ? IJ.textPrimary : IJ.textSecondary)
                 Button(action: { session.closeTab(file) }) {
-                    Image("JB-tool-close")
-                        .resizable().renderingMode(.template).aspectRatio(contentMode: .fit)
-                        .foregroundColor(IJ.textSecondary)
-                        .frame(width: 9, height: 9)
-                        .padding(2)
+                    if session.modifiedFiles.contains(file) {
+                        // JetBrains modified-tab marker: blue dot replaces the
+                        // close glyph until you hover/tap (we use tap on phone).
+                        Circle()
+                            .fill(IJ.accentBlue)
+                            .frame(width: 7, height: 7)
+                            .padding(3)
+                    } else {
+                        Image("JB-tool-close")
+                            .resizable().renderingMode(.template).aspectRatio(contentMode: .fit)
+                            .foregroundColor(IJ.textSecondary)
+                            .frame(width: 9, height: 9)
+                            .padding(2)
+                    }
                 }
             }
             .padding(.horizontal, 12)
@@ -330,13 +356,43 @@ struct PhoneIDEView: View {
                     .onEnded { _ in dragStartRatio = editorRatio }
             )
 
+            // The bottom slot is preview only now — Junie lives in a right
+            // slide-in tool window (toggled by the icon-strip Junie button)
+            // so the layout matches WebStorm New UI more closely.
             if showPreview {
                 PreviewPane(html: session.currentCode, onWebViewReady: { wv in previewWebView = wv })
                     .frame(height: restH)
                     .background(Color.white)
-            } else {
-                AgentPanel(session: session)
-                    .frame(height: restH)
+            }
+        }
+    }
+
+    // MARK: - Right slide-in Junie tool window
+
+    private func junieRightPanel(height: CGFloat) -> some View {
+        let totalWidth = UIScreen.main.bounds.width
+        // Phone-sized: panel takes ~62% of the screen — leaves a strip of editor
+        // visible behind it like WebStorm's split tool windows.
+        let panelWidth = max(280, totalWidth * 0.62)
+        return ZStack(alignment: .trailing) {
+            if showJunie {
+                Color.black.opacity(0.001)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(.easeOut(duration: 0.22)) { showJunie = false } }
+                VStack(spacing: 0) {
+                    AgentPanel(session: session)
+                }
+                .frame(width: panelWidth, height: height)
+                .background(IJ.bgSidebar)
+                .overlay(
+                    Rectangle().fill(IJ.border).frame(width: 1),
+                    alignment: .leading
+                )
+                .overlay(
+                    Rectangle().fill(IJ.accentGreen).frame(height: 2),
+                    alignment: .top
+                )
+                .transition(.move(edge: .trailing))
             }
         }
     }
@@ -463,6 +519,7 @@ struct PhoneIDEView: View {
             switch result {
             case .success(let newSha):
                 if !newSha.isEmpty { self.session.gitHubFileShas[path] = newSha }
+                self.session.markFileSynced(path)
                 self.statusMessage = "pushed"
                 self.session.appendChat(.assistant, "Pushed \(path) to GitHub.")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { self.statusMessage = "" }

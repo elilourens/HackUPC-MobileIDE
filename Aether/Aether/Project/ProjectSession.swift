@@ -90,6 +90,9 @@ final class ProjectSession: ObservableObject {
     @Published var isGitHubConnected: Bool = false
     /// Cached blob SHAs per file path — needed for `PUT contents` to update a file.
     var gitHubFileShas: [String: String] = [:]
+    /// Files that have unsaved/uncommitted changes since last GitHub pull or
+    /// since first edit. Used to render the JetBrains modified-tab dot.
+    @Published var modifiedFiles: Set<String> = []
 
     // MARK: - Backend
     @Published var backendURL: String {
@@ -159,6 +162,13 @@ final class ProjectSession: ObservableObject {
         if isSeededDemoContent {
             isSeededDemoContent = false
         }
+        // Mark this file as modified for the tab dot (cleared by GitHub push).
+        modifiedFiles.insert(file)
+    }
+
+    /// Clear the modified marker — call after a successful GitHub push of `file`.
+    func markFileSynced(_ file: String) {
+        modifiedFiles.remove(file)
     }
 
     /// Pop the latest history entry into projectFiles. Returns the (file, code) restored,

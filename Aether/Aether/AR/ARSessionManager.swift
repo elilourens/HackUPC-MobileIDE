@@ -546,6 +546,8 @@ final class ARSessionManager: NSObject, ObservableObject {
             confirmPendingPlan()
         case .cancel:
             cancelPendingPlan()
+        case .skipStep(let n):
+            skipPlanStep(n)
         case .selectElement:
             selectionArmed = true
             JarvisVoice.shared.speak("Tap on the preview to select.")
@@ -796,6 +798,25 @@ final class ARSessionManager: NSObject, ObservableObject {
             BackendClient.shared.generate(prompt: plan.expandedPrompt,
                                           session: session,
                                           completion: onResult)
+        }
+    }
+
+    /// Drop step `n` from the pending plan. Both 1-based step.id and 1-based
+    /// position are accepted to be voice-command friendly.
+    func skipPlanStep(_ n: Int) {
+        guard var plan = session.pendingPlan else { return }
+        let before = plan.steps.count
+        plan = BackendClient.PlanPayload(
+            summary: plan.summary,
+            steps: plan.steps.filter { $0.id != n },
+            expandedPrompt: plan.expandedPrompt
+        )
+        if plan.steps.count < before {
+            session.pendingPlan = plan
+            appendTerminalLog(.info, "skipped step \(n)")
+            JarvisVoice.shared.speak("Step \(n) skipped.")
+        } else {
+            JarvisVoice.shared.speak("No step \(n) in this plan.")
         }
     }
 

@@ -881,6 +881,63 @@ final class PanelManager {
         ctx.strokePath()
     }
 
+    /// Vertical tool-window icon strip on the far left of the AR editor — mirrors
+    /// the WebStorm New UI rail. Renders Project / Structure / Git / Bookmarks /
+    /// Junie icons. The active row gets a darker fill and a 2pt accent stripe.
+    private func drawArEditorIconStrip(_ ctx: CGContext, rect: CGRect) {
+        // Slightly darker than the editor body for the rail.
+        UIColor(red: 25/255, green: 27/255, blue: 30/255, alpha: 0.88).setFill()
+        UIBezierPath(rect: rect).fill()
+        ctx.setStrokeColor(JB.border.cgColor)
+        ctx.setLineWidth(0.6)
+        ctx.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+        ctx.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        ctx.strokePath()
+
+        // Five tool-window slots (active=Project by default).
+        struct Slot { let asset: String?; let junie: Bool; let active: Bool }
+        let slots: [Slot] = [
+            Slot(asset: "JB-tool-project",  junie: false, active: true),
+            Slot(asset: nil,                junie: false, active: false), // Structure (no asset)
+            Slot(asset: "JB-tool-branch",   junie: false, active: false),
+            Slot(asset: nil,                junie: false, active: false), // Bookmarks (no asset)
+            Slot(asset: nil,                junie: true,  active: false), // Junie
+        ]
+        let iconSize: CGFloat = rect.width * 0.62
+        let rowHeight: CGFloat = rect.width * 1.4
+        var y = rect.minY + 4
+
+        for slot in slots {
+            let rowRect = CGRect(x: rect.minX, y: y, width: rect.width, height: rowHeight)
+            if slot.active {
+                JB.bgSidebar.setFill()
+                UIBezierPath(rect: rowRect).fill()
+                JB.accentBlue.setFill()
+                UIRectFill(CGRect(x: rowRect.minX, y: rowRect.minY + 4,
+                                  width: 2, height: rowRect.height - 8))
+            }
+            let iconRect = CGRect(x: rowRect.midX - iconSize / 2,
+                                  y: rowRect.midY - iconSize / 2,
+                                  width: iconSize, height: iconSize)
+            let assetName = slot.junie ? "JunieIcon" : slot.asset
+            if let name = assetName, let img = UIImage(named: name)?.cgImage {
+                ctx.saveGState()
+                ctx.translateBy(x: 0, y: iconRect.maxY + iconRect.minY)
+                ctx.scaleBy(x: 1, y: -1)
+                ctx.draw(img, in: iconRect)
+                ctx.restoreGState()
+            } else {
+                // Fallback dot for slots whose JB asset isn't available.
+                JB.textInactive.setFill()
+                UIBezierPath(ovalIn: CGRect(x: iconRect.midX - 3,
+                                             y: iconRect.midY - 3,
+                                             width: 6, height: 6)).fill()
+            }
+            y += rowHeight
+            if y > rect.maxY - rowHeight { break }
+        }
+    }
+
     /// JetBrains-style window header for the editor panel: ArcReact gradient
     /// sticker on the left, "ArcReact" wordmark, separator, and the active
     /// filename on the right. Mirrors the WebStorm / PyCharm / IntelliJ window
@@ -947,6 +1004,60 @@ final class PanelManager {
         ])
         filenamePart.draw(at: CGPoint(x: stickerRect.maxX + 10 + wordmarkSize.width,
                                        y: textY + 1))
+
+        // Right side: branch widget + run + debug + AI sparkle (matches the
+        // phone IDE toolbar so both surfaces read the same).
+        let glyphSize = rect.height * 0.50
+        var rightX = rect.maxX - 10
+
+        // Junie sparkle (rightmost)
+        if let junie = UIImage(named: "JunieIcon")?.cgImage {
+            let r = CGRect(x: rightX - glyphSize, y: rect.midY - glyphSize / 2,
+                           width: glyphSize, height: glyphSize)
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: r.maxY + r.minY); ctx.scaleBy(x: 1, y: -1)
+            ctx.draw(junie, in: r); ctx.restoreGState()
+            rightX = r.minX - 14
+        }
+        // Debug
+        if let debug = UIImage(named: "JB-tool-debug")?.cgImage {
+            let r = CGRect(x: rightX - glyphSize, y: rect.midY - glyphSize / 2,
+                           width: glyphSize, height: glyphSize)
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: r.maxY + r.minY); ctx.scaleBy(x: 1, y: -1)
+            ctx.draw(debug, in: r); ctx.restoreGState()
+            rightX = r.minX - 10
+        }
+        // Run
+        if let run = UIImage(named: "JB-tool-run")?.cgImage {
+            let r = CGRect(x: rightX - glyphSize, y: rect.midY - glyphSize / 2,
+                           width: glyphSize, height: glyphSize)
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: r.maxY + r.minY); ctx.scaleBy(x: 1, y: -1)
+            ctx.draw(run, in: r); ctx.restoreGState()
+            rightX = r.minX - 14
+        }
+        // Branch widget — pill with branch icon + "main"
+        let branchPillFont = UIFont.systemFont(ofSize: rect.height * 0.32, weight: .regular)
+        let branchText = NSAttributedString(string: "main", attributes: [
+            .font: branchPillFont, .foregroundColor: JB.textActive
+        ])
+        let branchTextSize = branchText.size()
+        let pillW = branchTextSize.width + glyphSize + 18
+        let pillH = rect.height * 0.62
+        let pillRect = CGRect(x: rightX - pillW, y: rect.midY - pillH / 2,
+                              width: pillW, height: pillH)
+        UIColor(red: 43/255, green: 45/255, blue: 48/255, alpha: 1).setFill()
+        UIBezierPath(roundedRect: pillRect, cornerRadius: 4).fill()
+        if let branch = UIImage(named: "JB-tool-branch")?.cgImage {
+            let r = CGRect(x: pillRect.minX + 6, y: pillRect.midY - glyphSize / 2,
+                           width: glyphSize, height: glyphSize)
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: r.maxY + r.minY); ctx.scaleBy(x: 1, y: -1)
+            ctx.draw(branch, in: r); ctx.restoreGState()
+        }
+        branchText.draw(at: CGPoint(x: pillRect.minX + 6 + glyphSize + 4,
+                                     y: pillRect.midY - branchTextSize.height / 2))
     }
 
     /// IntelliJ-style status bar across the bottom of the editor panel.
@@ -1122,16 +1233,24 @@ final class PanelManager {
                                           height: titlebarHeight),
                              filename: liveActiveFile ?? "index.html")
 
-        // Layout: left sidebar (~24% width) | separator | code area
-        let sidebarWidth = (size.width - outerPad * 2) * 0.24
-        let separatorX = outerPad + sidebarWidth + 12
+        // Layout: vertical icon strip (~20pt) | left sidebar (~22% width) | separator | code area
+        let stripWidth: CGFloat = max(22, size.width * 0.025)
+        let stripRect = CGRect(x: outerPad,
+                               y: outerPad + titlebarHeight + 10,
+                               width: stripWidth,
+                               height: size.height - statusBarHeight - 6 - (outerPad + titlebarHeight + 10))
+        let sidebarLeft = stripRect.maxX + 1
+        let sidebarWidth = (size.width - outerPad * 2) * 0.22
+        let separatorX = sidebarLeft + sidebarWidth + 12
         let codeAreaLeft = separatorX + 12
         let workTop = outerPad + titlebarHeight + 10
         let workBottom = size.height - statusBarHeight - 6
 
+        drawArEditorIconStrip(ctx, rect: stripRect)
+
         // ---- Sidebar (project view) ----------------------------------------
         // Slightly darker rounded rect — IntelliJ "Tool Window" container.
-        let sidebarRect = CGRect(x: outerPad, y: workTop,
+        let sidebarRect = CGRect(x: sidebarLeft, y: workTop,
                                  width: sidebarWidth, height: workBottom - workTop)
         let sidebarPath = UIBezierPath(roundedRect: sidebarRect, cornerRadius: 6)
         JB.bgSidebar.setFill()
