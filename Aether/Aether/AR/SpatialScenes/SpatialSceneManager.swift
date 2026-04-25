@@ -1,4 +1,5 @@
 import ARKit
+import ImageIO
 import RealityKit
 import UIKit
 
@@ -81,32 +82,65 @@ final class SpatialSceneManager {
         sceneAnchor = nil
     }
 
-    /// Loads compiled `.skybox` environment maps (see Apple `EnvironmentResource` docs). Work is off the main thread to reduce hitches.
+    /// Loads `.skybox` environments: tries Xcode-compiled catalog first, then builds from bundled EXR via `generate(fromEquirectangular:)` (main-actor; may hitch on large maps).
     private func loadSkyboxEnvironment(for scene: SpatialScene, animated: Bool) {
         guard let baseName = scene.environmentImageBaseName else { return }
 
         print("[SpatialScene] EnvironmentResource load started: \(baseName)")
 
-        Task.detached { [baseName, scene] in
-            let loaded = Result { try EnvironmentResource.load(named: baseName, in: Bundle.main) }
+        let sceneSnapshot = scene
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard self.currentScene == sceneSnapshot else { return }
+            guard let arView = self.arView else { return }
 
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                guard self.currentScene == scene else { return }
-                guard let arView = self.arView else { return }
-
-                switch loaded {
-                case .success(let env):
-                    arView.environment.background = .skybox(env)
-                    arView.environment.lighting.resource = env
-                    print("[SpatialScene] EnvironmentResource loaded: \(baseName)")
-                case .failure(let error):
-                    print("[SpatialScene] EnvironmentResource load failed (\(baseName)): \(error.localizedDescription)")
-                    arView.environment.background = .color(scene.backgroundColor)
-                    arView.environment.lighting.resource = nil
-                    self.buildProcedural(for: scene, animated: animated)
-                }
+            var env: EnvironmentResource?
+            do {
+                env = try EnvironmentResource.load(named: baseName, in: Bundle.main)
+                print("[SpatialScene] EnvironmentResource loaded (precompiled): \(baseName)")
+            } catch {
+                print("[SpatialScene] precompiled load failed (\(baseName)): \(error.localizedDescription)")
+                env = Self.environmentResourceFromBundledEXR(scene: sceneSnapshot, baseName: baseName)
             }
+
+            guard self.currentScene == sceneSnapshot else { return }
+            if let env {
+                arView.environment.background = .skybox(env)
+                arView.environment.lighting.resource = env
+            } else {
+                print("[SpatialScene] no EnvironmentResource; using procedural fallback for \(baseName)")
+                arView.environment.background = .color(sceneSnapshot.backgroundColor)
+                arView.environment.lighting.resource = nil
+                self.buildProcedural(for: sceneSnapshot, animated: animated)
+            }
+        }
+    }
+
+    /// Finds the EXR in the bundle (several paths for older installs) and converts it with RealityKit’s equirectangular generator.
+    private static func environmentResourceFromBundledEXR(scene: SpatialScene, baseName: String) -> EnvironmentResource? {
+        guard let folder = scene.environmentSkyboxFolderName else { return nil }
+        let bundle = Bundle.main
+        let candidates: [URL?] = [
+            bundle.url(forResource: baseName, withExtension: "exr", subdirectory: folder),
+            bundle.url(forResource: baseName, withExtension: "exr", subdirectory: "EnvironmentMaps/\(folder)"),
+            bundle.url(forResource: baseName, withExtension: "exr", subdirectory: "EnvironmentMaps"),
+        ]
+        guard let url = candidates.compactMap({ $0 }).first else {
+            print("[SpatialScene] EXR not found in bundle for \(baseName) (checked \(folder), EnvironmentMaps/…)")
+            return nil
+        }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            print("[SpatialScene] ImageIO could not decode EXR at \(url.lastPathComponent)")
+            return nil
+        }
+        do {
+            let resource = try EnvironmentResource.generate(fromEquirectangular: cgImage, withName: baseName)
+            print("[SpatialScene] EnvironmentResource generated from EXR at \(url.path)")
+            return resource
+        } catch {
+            print("[SpatialScene] generate(fromEquirectangular:) failed: \(error.localizedDescription)")
+            return nil
         }
     }
 

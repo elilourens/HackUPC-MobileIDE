@@ -37,6 +37,16 @@ enum SpatialScene: String, CaseIterable, Codable {
         return String(name[..<dot])
     }
 
+    /// Folder name in the app bundle (sibling to other Resources) containing the EXR for URL-based fallback loading.
+    var environmentSkyboxFolderName: String? {
+        switch self {
+        case .cambridge: return "Cambridge.skybox"
+        case .canaryWharf: return "CanaryWharf.skybox"
+        case .pretoriaGardens: return "PretoriaGardens.skybox"
+        case .realWorld, .focusDark: return nil
+        }
+    }
+
     var accentColor: Color {
         switch self {
         case .realWorld: return .white

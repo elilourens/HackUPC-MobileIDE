@@ -188,7 +188,9 @@
 			children = (
 				F100000000000000000000AC /* Assets.xcassets */,
 				F100000000000000000000DB /* JBIcons */,
-				F300000000000000000000E0 /* EnvironmentMaps */,
+				F100000000000000000000EB /* Cambridge.skybox */,
+				F100000000000000000000EC /* CanaryWharf.skybox */,
+				F100000000000000000000ED /* PretoriaGardens.skybox */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -245,16 +247,6 @@
 				F100000000000000000000E1 /* SpatialScenePicker.swift */,
 			);
 			path = SpatialScenes;
-			sourceTree = "<group>";
-		};
-		F300000000000000000000E0 /* EnvironmentMaps */ = {
-			isa = PBXGroup;
-			children = (
-				F100000000000000000000EB /* Cambridge.skybox */,
-				F100000000000000000000EC /* CanaryWharf.skybox */,
-				F100000000000000000000ED /* PretoriaGardens.skybox */,
-			);
-			path = EnvironmentMaps;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
