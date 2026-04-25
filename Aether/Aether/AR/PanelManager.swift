@@ -744,6 +744,70 @@ final class PanelManager {
 
     private var Jarvis: JarvisPalette { theme == .dark ? PanelManager.darkPalette : PanelManager.lightPalette }
 
+    // MARK: JetBrains Islands palette (IDE panel only — terminal/preview/assistant
+    // keep the JARVIS holographic palette for AR ambiance)
+    private enum JB {
+        // Backgrounds: 0.75 alpha so the AR camera feed shows through faintly.
+        static let bg          = UIColor(red:  43/255, green:  45/255, blue:  48/255, alpha: 0.75)
+        static let bgSidebar   = UIColor(red:  30/255, green:  31/255, blue:  34/255, alpha: 0.82)
+        static let border      = UIColor(red:  30/255, green:  31/255, blue:  34/255, alpha: 1.00)
+        // UI accents
+        static let accentBlue  = UIColor(red:  74/255, green: 136/255, blue: 199/255, alpha: 1)
+        static let textActive  = UIColor(red: 188/255, green: 190/255, blue: 196/255, alpha: 1)
+        static let textInactive = UIColor(red: 111/255, green: 115/255, blue: 122/255, alpha: 1)
+        static let lineNumber  = UIColor(red: 111/255, green: 115/255, blue: 122/255, alpha: 1)
+        // Darcula syntax tokens
+        static let synKeyword  = UIColor(red: 204/255, green: 120/255, blue:  50/255, alpha: 1) // orange
+        static let synString   = UIColor(red: 106/255, green: 135/255, blue:  89/255, alpha: 1) // green
+        static let synFunction = UIColor(red: 255/255, green: 198/255, blue: 109/255, alpha: 1) // yellow
+        static let synType     = UIColor(red: 169/255, green: 183/255, blue: 198/255, alpha: 1) // light grey-blue
+        static let synComment  = UIColor(red: 128/255, green: 128/255, blue: 128/255, alpha: 1)
+        static let synNumber   = UIColor(red: 104/255, green: 151/255, blue: 187/255, alpha: 1) // blue
+        static let synHtmlTag  = UIColor(red: 232/255, green: 191/255, blue: 106/255, alpha: 1) // gold
+        static let synHtmlAttr = UIColor(red: 186/255, green: 186/255, blue: 186/255, alpha: 1)
+        static let synNormal   = UIColor(red: 188/255, green: 190/255, blue: 196/255, alpha: 1)
+        // File-tree icon dots — JetBrains ProjectView convention.
+        static let iconHtml    = UIColor(red: 232/255, green: 158/255, blue:  90/255, alpha: 1) // orange
+        static let iconCss     = UIColor(red: 121/255, green: 174/255, blue:  90/255, alpha: 1) // green
+        static let iconJs      = UIColor(red:  90/255, green: 158/255, blue: 232/255, alpha: 1) // blue
+        static let iconConfig  = UIColor(red: 175/255, green: 132/255, blue: 232/255, alpha: 1) // purple
+        static let iconDefault = UIColor(red: 188/255, green: 190/255, blue: 196/255, alpha: 1)
+    }
+
+    /// Color the file-tree dot by extension. Mirrors JetBrains' ProjectView
+    /// convention so judges from JetBrains see something familiar.
+    private func jbIconColor(for filename: String) -> UIColor {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "html", "htm": return JB.iconHtml
+        case "css", "scss", "sass", "less": return JB.iconCss
+        case "js", "jsx", "ts", "tsx", "mjs", "cjs": return JB.iconJs
+        case "json", "yaml", "yml", "toml", "xml", "plist": return JB.iconConfig
+        default: return JB.iconDefault
+        }
+    }
+
+    /// JetBrains-Islands background for the IDE panel: solid neutral grey at
+    /// 0.75 alpha + the same cyan scan-line overlay used by JARVIS panels so
+    /// the AR ambient holds across the whole workspace.
+    private func drawJetBrainsBackground(_ ctx: CGContext, size: CGSize) {
+        JB.bg.setFill()
+        ctx.fill(CGRect(origin: .zero, size: size))
+        drawScanLines(ctx, size: size)
+    }
+
+    /// Map the existing TokenKind cases to JetBrains Darcula colors. Used only
+    /// inside the editor panel — preview/terminal/etc keep their JARVIS map.
+    private func jbColorForToken(_ kind: TokenKind) -> UIColor {
+        switch kind {
+        case .keyword:  return JB.synKeyword
+        case .function: return JB.synFunction
+        case .string:   return JB.synString
+        case .jsx:      return JB.synHtmlTag    // HTML opening/closing tags
+        case .normal:   return JB.synNormal
+        }
+    }
+
     private func drawJarvisBackground(_ ctx: CGContext, size: CGSize, dark: Bool = false) {
         (dark ? Jarvis.bgDarker : Jarvis.bg).setFill()
         ctx.fill(CGRect(origin: .zero, size: size))
@@ -859,52 +923,56 @@ final class PanelManager {
     /// rather than a single-column text dump. Backwards-compatible with Phase 1:
     /// when `liveCode` is nil, it shows the original React snippet on the right
     /// and a default file list on the left.
+    /// JetBrains-Islands styled IDE: left sidebar (project view) + tab bar + code
+    /// editor with Darcula syntax. Panel chrome (corner brackets, scan lines,
+    /// system readout) stays cyan as AR ambient — only the IDE content adopts
+    /// the JetBrains design language.
     private func drawEditor(in ctx: CGContext, size: CGSize) {
-        drawJarvisBackground(ctx, size: size)
+        drawJetBrainsBackground(ctx, size: size)
 
         let outerPad = max(20, min(size.width, size.height) * 0.04)
 
-        // Layout: left sidebar (~22% width) | vertical separator | code area
-        let sidebarWidth = (size.width - outerPad * 2) * 0.22
-        let separatorX = outerPad + sidebarWidth + 14
-        let codeAreaLeft = separatorX + 14
+        // Layout: left sidebar (~24% width) | separator | code area
+        let sidebarWidth = (size.width - outerPad * 2) * 0.24
+        let separatorX = outerPad + sidebarWidth + 12
+        let codeAreaLeft = separatorX + 12
         let workTop = outerPad + 6
         let workBottom = size.height - max(40, size.height * 0.06)  // room for system readout
 
-        // Sidebar background: 6% darker tint than the main panel bg so the two
-        // halves read as distinct without screaming.
-        let sidebarBg = (theme == .dark
-            ? UIColor(red:  4/255, green:  7/255, blue: 14/255, alpha: 0.55)
-            : UIColor(red: 232/255, green: 238/255, blue: 248/255, alpha: 0.55))
-        sidebarBg.setFill()
-        ctx.fill(CGRect(x: outerPad, y: workTop, width: sidebarWidth, height: workBottom - workTop))
+        // ---- Sidebar (project view) ----------------------------------------
+        // Slightly darker rounded rect → JetBrains "Tool Window" container.
+        let sidebarRect = CGRect(x: outerPad, y: workTop,
+                                 width: sidebarWidth, height: workBottom - workTop)
+        let sidebarPath = UIBezierPath(roundedRect: sidebarRect, cornerRadius: 8)
+        JB.bgSidebar.setFill()
+        sidebarPath.fill()
 
-        // Vertical separator (cyan, soft).
-        ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+        // Hairline #1e1f22 separator between sidebar and code area.
+        ctx.setStrokeColor(JB.border.cgColor)
         ctx.setLineWidth(1)
         ctx.move(to: CGPoint(x: separatorX, y: workTop))
         ctx.addLine(to: CGPoint(x: separatorX, y: workBottom))
         ctx.strokePath()
 
-        // ---- Sidebar: EXPLORER label + file rows ----------------------------
         let sidebarFontSize = max(11, size.height * 0.026)
-        let sidebarLabelFontSize = max(11, size.height * 0.022)
+        let sidebarLabelFontSize = max(11, size.height * 0.020)
         let labelFont = UIFont.systemFont(ofSize: sidebarLabelFontSize, weight: .semibold)
-        let fileFont = UIFont.monospacedSystemFont(ofSize: sidebarFontSize, weight: .regular)
+        let fileFont = UIFont.systemFont(ofSize: sidebarFontSize, weight: .regular)
 
+        // "Project" header — uppercase tracked label, JetBrains tool-window style.
         var sy: CGFloat = workTop + 14
-        NSAttributedString(string: "EXPLORER", attributes: [
+        NSAttributedString(string: "PROJECT", attributes: [
             .font: labelFont,
-            .foregroundColor: Jarvis.cyan,
-            .kern: 2.6
-        ]).draw(at: CGPoint(x: outerPad + 14, y: sy))
+            .foregroundColor: JB.textInactive,
+            .kern: 2.0
+        ]).draw(at: CGPoint(x: sidebarRect.minX + 14, y: sy))
         sy += sidebarLabelFontSize * 2.0
 
-        // Faint horizontal divider under the section header.
-        ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+        // Border under the section header.
+        ctx.setStrokeColor(JB.border.cgColor)
         ctx.setLineWidth(0.6)
-        ctx.move(to: CGPoint(x: outerPad + 8, y: sy - 6))
-        ctx.addLine(to: CGPoint(x: outerPad + sidebarWidth - 8, y: sy - 6))
+        ctx.move(to: CGPoint(x: sidebarRect.minX + 8, y: sy - 6))
+        ctx.addLine(to: CGPoint(x: sidebarRect.maxX - 8, y: sy - 6))
         ctx.strokePath()
 
         // Resolve which files to show + which is active.
@@ -917,43 +985,42 @@ final class PanelManager {
             sidebarFiles = [live]
             activeFile = live
         } else {
-            sidebarFiles = ["Login.tsx", "App.tsx", "index.css", "utils.ts"]
-            activeFile = "Login.tsx"
+            sidebarFiles = ["index.html", "styles.css", "app.js", "package.json"]
+            activeFile = "index.html"
         }
 
         for file in sidebarFiles {
             let isActive = (file == activeFile)
-            let rowH = sidebarFontSize * 1.65
-            let rowRect = CGRect(x: outerPad + 6, y: sy - 4, width: sidebarWidth - 12, height: rowH)
+            let rowH = sidebarFontSize * 1.7
+            let rowRect = CGRect(
+                x: sidebarRect.minX + 6,
+                y: sy - 4,
+                width: sidebarRect.width - 12,
+                height: rowH
+            )
 
             if isActive {
-                // Active row: faint cyan tint + cyan accent strip on the left.
-                ctx.setFillColor(Jarvis.cyan.withAlphaComponent(0.10).cgColor)
-                ctx.fill(rowRect)
-                ctx.setFillColor(Jarvis.cyan.cgColor)
-                ctx.fill(CGRect(x: rowRect.minX, y: rowRect.minY, width: 2.5, height: rowRect.height))
+                // JetBrains active-row background: rounded rect at #2E436E-ish blue.
+                let activeBg = JB.accentBlue.withAlphaComponent(0.30)
+                let rowPath = UIBezierPath(roundedRect: rowRect, cornerRadius: 5)
+                activeBg.setFill()
+                rowPath.fill()
             }
 
-            // File icon: small filled cyan dot (active) or hollow ring (inactive).
-            let iconR: CGFloat = sidebarFontSize * 0.20
-            let iconY = sy + sidebarFontSize * 0.45
-            let iconX = outerPad + 16
-            if isActive {
-                ctx.setFillColor(Jarvis.cyan.cgColor)
-                ctx.fillEllipse(in: CGRect(x: iconX, y: iconY - iconR, width: iconR * 2, height: iconR * 2))
-            } else {
-                ctx.setStrokeColor(Jarvis.cyanDim.cgColor)
-                ctx.setLineWidth(1)
-                ctx.strokeEllipse(in: CGRect(x: iconX, y: iconY - iconR, width: iconR * 2, height: iconR * 2))
-            }
+            // File icon: colored dot per extension (HTML orange, CSS green, etc).
+            let iconR: CGFloat = sidebarFontSize * 0.22
+            let iconY = sy + sidebarFontSize * 0.50
+            let iconX = sidebarRect.minX + 16
+            ctx.setFillColor(jbIconColor(for: file).cgColor)
+            ctx.fillEllipse(in: CGRect(x: iconX, y: iconY - iconR,
+                                       width: iconR * 2, height: iconR * 2))
 
-            // File name. Truncate by allowing the row to clip — the sidebar is
-            // intentionally narrow.
-            let color: UIColor = isActive ? Jarvis.cyan : Jarvis.textPrimary
+            // File name.
+            let textColor: UIColor = isActive ? JB.textActive : JB.textInactive
             NSAttributedString(string: file, attributes: [
                 .font: fileFont,
-                .foregroundColor: color
-            ]).draw(at: CGPoint(x: outerPad + 16 + iconR * 2 + 8, y: sy))
+                .foregroundColor: textColor
+            ]).draw(at: CGPoint(x: iconX + iconR * 2 + 10, y: sy))
             sy += rowH
             if sy > workBottom - rowH { break }
         }
@@ -967,33 +1034,43 @@ final class PanelManager {
             height: tabBarHeight
         )
 
-        // Tab separator line.
-        ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+        // Bottom border of the tab bar — JetBrains hairline.
+        ctx.setStrokeColor(JB.border.cgColor)
         ctx.setLineWidth(1)
-        ctx.move(to: CGPoint(x: tabBarRect.minX, y: tabBarRect.maxY + 1))
-        ctx.addLine(to: CGPoint(x: tabBarRect.maxX, y: tabBarRect.maxY + 1))
+        ctx.move(to: CGPoint(x: tabBarRect.minX, y: tabBarRect.maxY))
+        ctx.addLine(to: CGPoint(x: tabBarRect.maxX, y: tabBarRect.maxY))
         ctx.strokePath()
 
-        let tabFontSize = tabBarHeight * 0.46
-        let tabFont = UIFont.systemFont(ofSize: tabFontSize, weight: .medium)
+        let tabFontSize = tabBarHeight * 0.42
+        let tabFont = UIFont.systemFont(ofSize: tabFontSize, weight: .regular)
         let displayedTabs: [String] = activeFile.map { [$0] } ?? ["Login.tsx", "App.tsx"]
         let activeTabIdx = activeFile == nil ? activeTab : 0
 
-        var tx = tabBarRect.minX + 6
+        var tx = tabBarRect.minX + 14
         for (i, t) in displayedTabs.enumerated() {
             let isActive = (i == activeTabIdx)
+            // Small extension dot in the tab too — JetBrains shows file-icon-by-type.
+            let dotR: CGFloat = tabFontSize * 0.22
+            let dotY = tabBarRect.midY
+            ctx.setFillColor(jbIconColor(for: t).cgColor)
+            ctx.fillEllipse(in: CGRect(x: tx, y: dotY - dotR,
+                                       width: dotR * 2, height: dotR * 2))
+            let textX = tx + dotR * 2 + 8
             let attr = NSAttributedString(string: t, attributes: [
                 .font: tabFont,
-                .foregroundColor: isActive ? Jarvis.cyan : Jarvis.textDim,
-                .kern: 1.0
+                .foregroundColor: isActive ? JB.textActive : JB.textInactive,
+                .kern: 0.4
             ])
             let w = attr.size().width
-            attr.draw(at: CGPoint(x: tx, y: tabBarRect.midY - tabFontSize / 1.6))
+            attr.draw(at: CGPoint(x: textX, y: tabBarRect.midY - tabFontSize / 1.7))
             if isActive {
-                ctx.setFillColor(Jarvis.cyan.cgColor)
-                ctx.fill(CGRect(x: tx, y: tabBarRect.maxY - 3, width: w, height: 2.5))
+                // 2px JetBrains-blue underline running the full tab width.
+                let tabFullW = (textX - tx) + w + 14
+                JB.accentBlue.setFill()
+                ctx.fill(CGRect(x: tx - 6, y: tabBarRect.maxY - 2,
+                                width: tabFullW, height: 2))
             }
-            tx += w + 28
+            tx += (textX - tx) + w + 28
         }
 
         // Code area geometry.
@@ -1003,7 +1080,7 @@ final class PanelManager {
         let codeFont = UIFont.monospacedSystemFont(ofSize: codeFontSize, weight: .regular)
         let lineNumWidth: CGFloat = codeFontSize * 2.4
         let xCodeLeft = codeAreaLeft
-        let xCodeText = xCodeLeft + lineNumWidth + 10
+        let xCodeText = xCodeLeft + lineNumWidth + 12
         var y = codeTop
 
         if let live = liveCode {
@@ -1020,7 +1097,7 @@ final class PanelManager {
             }
             let linesToRender = firstLine < lastLine ? Array(allLines[firstLine..<lastLine]) : []
 
-            // Replay language state for blocks that started before the scroll window.
+            // Replay language state for blocks starting before the scroll window.
             var currentLang: WebLang = .html
             for skipped in allLines.prefix(firstLine) {
                 if skipped.contains("<style") { currentLang = .css }
@@ -1038,19 +1115,20 @@ final class PanelManager {
 
                 NSAttributedString(string: String(format: "%3d", absIdx + 1), attributes: [
                     .font: codeFont,
-                    .foregroundColor: Jarvis.synLineNum
+                    .foregroundColor: JB.lineNumber
                 ]).draw(at: CGPoint(x: xCodeLeft, y: y))
 
-                ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+                // Subtle gutter divider in the JetBrains border color.
+                ctx.setStrokeColor(JB.border.cgColor)
                 ctx.setLineWidth(0.5)
-                ctx.move(to: CGPoint(x: xCodeLeft + lineNumWidth + 2, y: y - 2))
-                ctx.addLine(to: CGPoint(x: xCodeLeft + lineNumWidth + 2, y: y + codeFontSize + 2))
+                ctx.move(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: y - 2))
+                ctx.addLine(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: y + codeFontSize + 2))
                 ctx.strokePath()
 
                 let tokens = tokenizeWeb(line: line, lang: currentLang)
                 var dx = xCodeText
                 for (text, kind) in tokens {
-                    let color: UIColor = colorForToken(kind)
+                    let color: UIColor = jbColorForToken(kind)
                     let attr = NSAttributedString(string: text, attributes: [
                         .font: codeFont,
                         .foregroundColor: color
@@ -1083,19 +1161,19 @@ final class PanelManager {
             for (idx, line) in allLines.enumerated() {
                 NSAttributedString(string: String(format: "%2d", idx + 1), attributes: [
                     .font: codeFont,
-                    .foregroundColor: Jarvis.synLineNum
+                    .foregroundColor: JB.lineNumber
                 ]).draw(at: CGPoint(x: xCodeLeft, y: y))
 
-                ctx.setStrokeColor(Jarvis.cyanFaint.cgColor)
+                ctx.setStrokeColor(JB.border.cgColor)
                 ctx.setLineWidth(0.5)
-                ctx.move(to: CGPoint(x: xCodeLeft + lineNumWidth + 2, y: y - 2))
-                ctx.addLine(to: CGPoint(x: xCodeLeft + lineNumWidth + 2, y: y + codeFontSize + 2))
+                ctx.move(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: y - 2))
+                ctx.addLine(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: y + codeFontSize + 2))
                 ctx.strokePath()
 
                 let tokens = tokenize(line: line)
                 var dx = xCodeText
                 for (text, kind) in tokens {
-                    let color: UIColor = colorForToken(kind)
+                    let color: UIColor = jbColorForToken(kind)
                     let attr = NSAttributedString(string: text, attributes: [
                         .font: codeFont,
                         .foregroundColor: color
@@ -1108,6 +1186,7 @@ final class PanelManager {
             }
         }
 
+        // AR ambient stays cyan — corner brackets + system readout unchanged.
         drawSystemReadout(ctx, size: size, extra: "IDE")
         drawCornerBrackets(ctx, size: size)
     }
