@@ -11,7 +11,13 @@ final class PreviewRenderer: NSObject, WKNavigationDelegate {
     /// Logical content size used both for the WKWebView frame and for UV→pixel
     /// mapping when the user points at the panel. Kept in sync with the JS
     /// `document.elementFromPoint` coordinate space.
-    static let contentSize = CGSize(width: 375, height: 667)
+    ///
+    /// Sized for a 16:9 landscape preview panel (matches the AR panel's inner-rect
+    /// aspect ~1.73). At this width Gemini's "polished product" pages render with
+    /// desktop-style layouts rather than a cramped mobile column, which removes the
+    /// horizontal stretch we'd otherwise see when blitting a portrait snapshot into
+    /// a landscape panel.
+    static let contentSize = CGSize(width: 1600, height: 900)
 
     /// CSS injected on every load so selected elements get a cyan outline.
     private static let selectionStyle = """
@@ -124,6 +130,54 @@ final class PreviewRenderer: NSObject, WKNavigationDelegate {
                 self.snapshot { image in
                     completion(info, image)
                 }
+            }
+        }
+    }
+
+    /// Scroll the WKWebView's content vertically by `dy` CSS pixels (positive = scroll
+    /// down through the page) and snapshot once the layout settles. Clamps to the
+    /// page's scrollable range so we never overshoot.
+    func scrollBy(dy: CGFloat, completion: @escaping (UIImage?) -> Void) {
+        let scrollView = webView.scrollView
+        let visibleH = scrollView.bounds.height
+        let contentH = scrollView.contentSize.height
+        let maxY = max(0, contentH - visibleH)
+        var offset = scrollView.contentOffset
+        offset.y = max(0, min(maxY, offset.y + dy))
+        scrollView.setContentOffset(offset, animated: false)
+        // Tiny delay so layout repaints before snapshotting.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) { [weak self] in
+            self?.snapshot { completion($0) }
+        }
+    }
+
+    /// Click-through: synthesize a DOM click on whatever element sits at
+    /// `pointInWeb`. Re-snapshots after a short settle so any hover/focus styles
+    /// or onclick-driven mutations make it into the texture. Returns whether a
+    /// clickable target was found.
+    func clickElement(at pointInWeb: CGPoint, completion: @escaping (Bool, UIImage?) -> Void) {
+        let js = """
+        (function() {
+          var el = document.elementFromPoint(\(pointInWeb.x), \(pointInWeb.y));
+          if (!el) return false;
+          // For inputs, focus instead of click — clicking moves the caret but the
+          // user can't actually type without a keyboard, so a focus ring is the
+          // best feedback we can give.
+          var tag = (el.tagName || '').toLowerCase();
+          if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+            try { el.focus(); } catch(e) {}
+            return true;
+          }
+          try { el.click(); } catch(e) { return false; }
+          return true;
+        })();
+        """
+        webView.evaluateJavaScript(js) { [weak self] result, _ in
+            guard let self = self else { completion(false, nil); return }
+            let clicked = (result as? Bool) ?? false
+            // Wait a beat — onclick handlers may mutate the DOM, transition styles, etc.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+                self.snapshot { image in completion(clicked, image) }
             }
         }
     }

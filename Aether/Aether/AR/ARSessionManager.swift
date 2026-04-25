@@ -11,6 +11,12 @@ final class ARSessionManager: NSObject, ObservableObject {
     // MARK: Published state
     @Published var hasDetectedSurface: Bool = false
     @Published var workspacePlaced: Bool = false
+    /// True after the user has tapped "Let's start" (or kicked off the first voice
+    /// command). Until this flips, the desk shows only the ambient circle — no
+    /// editor / file tree / terminal / assistant panels. Lets the workspace
+    /// "wake up" with a satisfying conjure animation rather than dumping
+    /// everything on the user the moment they place the anchor.
+    @Published var workspaceStarted: Bool = false
     @Published var currentGesture: GestureType = .none
     @Published var pointingPanel: PanelKind? = nil
     @Published var grabbedPanel: PanelKind? = nil
@@ -36,6 +42,11 @@ final class ARSessionManager: NSObject, ObservableObject {
     /// When true, the next preview-pointing tap selects an element instead of toggling
     /// panel selection. Set by the "select" voice command.
     private var selectionArmed: Bool = false
+    /// Sticky version of `pointingPanel` — keeps the last non-nil value so a swipe
+    /// gesture (which clears pointingPanel mid-motion) can still know which panel
+    /// the user just lifted their finger off.
+    private var lastPointingPanel: PanelKind?
+    private var lastPointingPanelTime: TimeInterval = 0
 
     // MARK: Hand & gestures
     nonisolated let handTracker = HandTracker()
@@ -141,13 +152,20 @@ final class ARSessionManager: NSObject, ObservableObject {
             }
             return
         }
-        // Post-placement: check for preview panel element selection first
+        // Post-placement: check for preview panel interaction first.
         if let hitResult = arView.hitTest(point, query: .nearest, mask: .all).first,
            let kind = panelManager?.panelKind(for: hitResult.entity),
            kind == .preview,
            !session.currentCode.isEmpty {
-            // Try element selection on the preview panel
-            handlePreviewTap(hitResult: hitResult)
+            // "select" voice command armed → element selection. Otherwise default
+            // to click-through (DOM .click() at the tapped point).
+            if let webPoint = previewWebPoint(from: hitResult) {
+                if selectionArmed {
+                    handlePreviewSelect(at: webPoint)
+                } else {
+                    handlePreviewClick(at: webPoint)
+                }
+            }
             return
         }
 
@@ -160,34 +178,28 @@ final class ARSessionManager: NSObject, ObservableObject {
         }
     }
 
-    private func handlePreviewTap(hitResult: CollisionCastHit) {
+    /// Shared world→panel-local→UV→web-pixel conversion for preview interactions.
+    /// Returns nil if the hit fell outside the panel surface (defensive, the hit
+    /// should already be on the panel for this call site).
+    private func previewWebPoint(from hitResult: CollisionCastHit) -> CGPoint? {
         guard let panelManager = panelManager,
-              let previewPanel = panelManager.panels[.preview] else { return }
-
-        // RealityKit's hitTest returns the world-space hit position directly.
+              let previewPanel = panelManager.panels[.preview] else { return nil }
         let hitWorld = hitResult.position
-        // Convert world position to panel-local coordinates
         let localPos = previewPanel.convert(position: hitWorld, from: nil)
+        let halfW = previewPanel.widthMeters / 2
+        let halfH = previewPanel.heightMeters / 2
+        let u = (localPos.x + halfW) / previewPanel.widthMeters
+        let v = (localPos.y + halfH) / previewPanel.heightMeters
+        guard u >= 0, u <= 1, v >= 0, v <= 1 else { return nil }
+        let webSize = PreviewRenderer.contentSize
+        return CGPoint(x: CGFloat(u) * webSize.width, y: CGFloat(1 - v) * webSize.height)
+    }
 
-        // Panel dimensions in meters
-        let widthMeters = previewPanel.widthMeters
-        let heightMeters = previewPanel.heightMeters
-        let halfW = widthMeters / 2
-        let halfH = heightMeters / 2
-
-        // Map to UV (0–1)
-        let u = (localPos.x + halfW) / widthMeters
-        let v = (localPos.y + halfH) / heightMeters
-
-        // Guard against out-of-bounds (shouldn't happen on a valid hit, but safe)
-        guard u >= 0, u <= 1, v >= 0, v <= 1 else { return }
-
-        // Map to web pixel coordinates (375×667, Y-flipped). u/v are Float; convert
-        // explicitly so the CGPoint init compiles.
-        let webX = CGFloat(u) * 375
-        let webY = CGFloat(1 - v) * 667
-
-        previewRenderer.selectElement(at: CGPoint(x: webX, y: webY)) { [weak self] info, image in
+    /// Element-selection mode: outline the element under the tap, store it in
+    /// session.selectedElement, and arm the next codegen call to scope the change
+    /// to that element only.
+    private func handlePreviewSelect(at webPoint: CGPoint) {
+        previewRenderer.selectElement(at: webPoint) { [weak self] info, image in
             guard let self = self else { return }
             self.session.setSelectedElement(info)
             if let image = image {
@@ -196,6 +208,19 @@ final class ARSessionManager: NSObject, ObservableObject {
             self.appendTerminalLog(.command, "selected \(info?.humanLabel ?? "element")")
             JarvisVoice.shared.speak("Selected. What would you like to change?")
             self.selectionArmed = false
+        }
+    }
+
+    /// Click-through mode: synthesize a DOM click on whatever element is under
+    /// the tap, then re-snapshot so any onclick mutations make it into the
+    /// preview texture.
+    private func handlePreviewClick(at webPoint: CGPoint) {
+        appendTerminalLog(.command, "click @ (\(Int(webPoint.x)), \(Int(webPoint.y)))")
+        previewRenderer.clickElement(at: webPoint) { [weak self] _, image in
+            guard let self = self else { return }
+            if let image = image {
+                self.panelManager?.setPreviewImage(image)
+            }
         }
     }
 
@@ -326,6 +351,12 @@ final class ARSessionManager: NSObject, ObservableObject {
                 pointingPanel = panel
                 pm.setHoverHighlight(panel)
             }
+            // Sticky tracker: remember the last non-nil pointed panel for the
+            // swipe-routing window in handleSwipe.
+            if let panel = panel {
+                lastPointingPanel = panel
+                lastPointingPanelTime = CACurrentMediaTime()
+            }
         } else {
             if pointingPanel != nil {
                 pointingPanel = nil
@@ -389,6 +420,26 @@ final class ARSessionManager: NSObject, ObservableObject {
 
     private func handleSwipe(direction: SwipeDirection) {
         guard let pm = panelManager else { return }
+
+        // Vertical swipes scroll the preview when the user is (or recently was)
+        // pointing at it — otherwise they scroll the editor. The "recently"
+        // window catches the common case where the user finishes pointing and
+        // immediately swipes (gesture state already cleared).
+        if direction == .up || direction == .down {
+            let recentlyAtPreview = (CACurrentMediaTime() - lastPointingPanelTime) < 1.0
+                && lastPointingPanel == .preview
+            if (pointingPanel == .preview || recentlyAtPreview)
+                && !session.currentCode.isEmpty
+                && pm.isPanelVisible(.preview) {
+                let dy: CGFloat = direction == .up ? 240 : -240
+                previewRenderer.scrollBy(dy: dy) { [weak self] image in
+                    guard let self = self, let image = image else { return }
+                    self.panelManager?.setPreviewImage(image)
+                }
+                return
+            }
+        }
+
         switch direction {
         case .left, .right:
             pm.cycleEditorTab(forward: direction == .right)
@@ -455,6 +506,11 @@ final class ARSessionManager: NSObject, ObservableObject {
     // MARK: - Voice command dispatch
 
     func handleVoiceCommand(_ command: VoiceCommand) {
+        // Voice-first users may speak before tapping "Let's start" — wake the
+        // workspace up first so panels exist to receive their command.
+        if !workspaceStarted {
+            beginWorkspace()
+        }
         switch command {
         case .codegen(let prompt):
             if session.currentCode.isEmpty {
@@ -658,6 +714,22 @@ final class ARSessionManager: NSObject, ObservableObject {
     /// Speaks the JARVIS welcome line, called once when the workspace is placed.
     func speakWelcome() {
         JarvisVoice.shared.speak("Hello sir. What are we working on today?")
+    }
+
+    /// Wake the workspace up: materialize the base panels (assistant → editor →
+    /// file tree → terminal, staggered) and play the JARVIS welcome line.
+    /// Idempotent. Called by the "Let's start" overlay tap, and as a safety
+    /// net at the top of handleVoiceCommand so a voice-first user is never
+    /// stuck on an empty desk.
+    func beginWorkspace() {
+        guard !workspaceStarted else { return }
+        workspaceStarted = true
+        panelManager?.materializeBasePanels()
+        // Speak welcome a hair AFTER the assistant panel has begun materializing
+        // so the bubble is visible while JARVIS talks.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+            JarvisVoice.shared.speak("Hello sir. What are we working on today?")
+        }
     }
 
     func runFakeAIResponse() {

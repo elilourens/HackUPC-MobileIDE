@@ -23,6 +23,9 @@ final class PanelManager {
     /// True after enterLiveIDEMode() has run. Idempotent guard so subsequent
     /// codegens don't re-trigger the layout-shift animation.
     private(set) var liveIDEModeActive: Bool = false
+    /// True after materializeBasePanels() has run. Idempotent — the workspace
+    /// only "wakes up" once.
+    private(set) var basePanelsMaterialized: Bool = false
 
     // Phase 2 — live IDE state
     /// When non-nil, drawEditor renders these lines (with HTML/CSS/JS highlighting)
@@ -77,6 +80,11 @@ final class PanelManager {
         let tilt = simd_quatf(angle: tiltAngle, axis: SIMD3<Float>(1, 0, 0))
         for p in [editorPanel, fileTreePanel, terminalPanel, assistantPanel] {
             p.transform.rotation = tilt
+            // Start every panel hidden + scaled to zero. They materialize via
+            // materializeBasePanels() once the user taps "Let's start". This gives
+            // an empty-desk first impression and a satisfying conjure animation.
+            p.transform.scale = SIMD3<Float>(0.001, 0.001, 0.001)
+            p.isEnabled = false
         }
 
         // Voice-activated panels — each gets its OWN dedicated zone so it never overlaps
@@ -513,6 +521,56 @@ final class PanelManager {
         // animation runs separately via materializePreview().
         if let preview = panels[.preview] {
             preview.position = SIMD3<Float>(0, 0.30, 0.20)
+        }
+    }
+
+    /// First-run "wake up" animation: bring the four base panels (assistant first,
+    /// then editor, file tree, terminal) up from zero with a staggered overshoot,
+    /// each ~150ms after the previous so it reads as JARVIS conjuring the
+    /// workspace into being. Idempotent.
+    func materializeBasePanels() {
+        guard !basePanelsMaterialized else { return }
+        basePanelsMaterialized = true
+
+        // Order matters — assistant first because that's where JARVIS "speaks" from,
+        // then the editor as the centerpiece, then the supporting panels.
+        let order: [(PanelKind, TimeInterval)] = [
+            (.assistant, 0.00),
+            (.editor,    0.18),
+            (.fileTree,  0.36),
+            (.terminal,  0.54),
+        ]
+        for (kind, delay) in order {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.materializePanel(kind)
+            }
+        }
+    }
+
+    /// Two-stage scale animation reused by materializeBasePanels and the
+    /// preview's first show. 0 → 1.06 → 1.0, ~0.75s total.
+    private func materializePanel(_ kind: PanelKind) {
+        guard let panel = panels[kind], let parent = panel.parent else { return }
+        panel.isEnabled = true
+        panel.transform.scale = SIMD3<Float>(0.001, 0.001, 0.001)
+
+        let baseRotation = panel.transform.rotation
+        let basePosition = panel.transform.translation
+
+        let stage1 = Transform(
+            scale: SIMD3<Float>(1.06, 1.06, 1.06),
+            rotation: baseRotation,
+            translation: basePosition
+        )
+        panel.move(to: stage1, relativeTo: parent, duration: 0.55, timingFunction: .easeOut)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { [weak panel] in
+            guard let panel = panel, let parent = panel.parent else { return }
+            let stage2 = Transform(
+                scale: SIMD3<Float>(1, 1, 1),
+                rotation: panel.transform.rotation,
+                translation: panel.transform.translation
+            )
+            panel.move(to: stage2, relativeTo: parent, duration: 0.20, timingFunction: .easeIn)
         }
     }
 
@@ -1540,8 +1598,29 @@ final class PanelManager {
         ctx.stroke(inner)
 
         if let preview = previewImage {
-            // Live preview: draw the image filling the inner rect
-            preview.draw(in: inner)
+            // Aspect-fit the snapshot inside `inner` so the WKWebView output never
+            // stretches when its aspect doesn't perfectly match the panel's inner
+            // rect (panel size can change at runtime via the corner-resize handles,
+            // and the WKWebView is a fixed 1600×900). Letterbox bands stay white
+            // so they read as "browser chrome" rather than a void.
+            let imgSize = preview.size
+            let drawRect: CGRect
+            if imgSize.width > 0, imgSize.height > 0 {
+                let imgAspect = imgSize.width / imgSize.height
+                let innerAspect = inner.width / inner.height
+                if imgAspect > innerAspect {
+                    // Image wider than the inner rect → letterbox top + bottom.
+                    let h = inner.width / imgAspect
+                    drawRect = CGRect(x: inner.minX, y: inner.midY - h / 2, width: inner.width, height: h)
+                } else {
+                    // Image taller than the inner rect → pillarbox left + right.
+                    let w = inner.height * imgAspect
+                    drawRect = CGRect(x: inner.midX - w / 2, y: inner.minY, width: w, height: inner.height)
+                }
+            } else {
+                drawRect = inner
+            }
+            preview.draw(in: drawRect)
         } else {
             // Phase 1 demo: fake login form
             let formCenter = CGPoint(x: inner.midX, y: inner.midY)

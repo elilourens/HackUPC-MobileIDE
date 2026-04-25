@@ -6,6 +6,18 @@ struct WorkspaceHUD: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
+            // "Let's start" overlay — visible until the user wakes the workspace up.
+            // Sits at the top of the ZStack so it captures taps even though the
+            // ARWorkspaceView underneath also has a tap recognizer (see below
+            // for the .allowsHitTesting placement).
+            if !sessionManager.workspaceStarted {
+                LetsStartOverlay {
+                    sessionManager.beginWorkspace()
+                }
+                .transition(.opacity.combined(with: .scale(scale: 1.05)))
+                .zIndex(100)
+            }
+
             // Top status pill (decorative — let taps pass through to AR view)
             VStack {
                 HStack(spacing: 10) {
@@ -79,6 +91,11 @@ struct WorkspaceHUD: View {
                     .padding(.bottom, 32)
             }
 
+            // (The overlay's transition handles its own fade — we still attach a
+            // body-level animation modifier below so SwiftUI animates the
+            // workspaceStarted boolean change, otherwise the overlay would just
+            // pop out without easing.)
+
             // Corner-resize handles for the currently selected panel.
             ForEach(Array(sessionManager.selectedPanelCorners.enumerated()), id: \.offset) { idx, point in
                 CornerHandle(corner: idx)
@@ -105,6 +122,7 @@ struct WorkspaceHUD: View {
                     )
             }
         }
+        .animation(.easeInOut(duration: 0.45), value: sessionManager.workspaceStarted)
     }
 
     private var gestureLabel: String {
@@ -225,6 +243,96 @@ private struct CornerBracketShape: Shape {
             p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
             p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - len))
         }
+        return p
+    }
+}
+
+/// Center-screen "Let's start" prompt shown after the user places the workspace
+/// but before the panels have been conjured. Tapping anywhere on the screen
+/// (the prompt covers the full HUD area transparently) fires `onTap`.
+private struct LetsStartOverlay: View {
+    let onTap: () -> Void
+    private let cyan = Color(red: 0.0, green: 0.83, blue: 1.0)
+    @State private var pulse: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            // Transparent full-screen catcher so taps anywhere wake the workspace.
+            Color.black.opacity(0.001)
+                .contentShape(Rectangle())
+                .onTapGesture { onTap() }
+
+            VStack(spacing: 22) {
+                // Aether glyph: concentric cyan rings with a hex center marker.
+                ZStack {
+                    Circle()
+                        .stroke(cyan.opacity(0.18), lineWidth: 1)
+                        .frame(width: 180 + pulse * 20, height: 180 + pulse * 20)
+                    Circle()
+                        .stroke(cyan.opacity(0.35 - pulse * 0.15), lineWidth: 1.5)
+                        .frame(width: 130, height: 130)
+                    Circle()
+                        .stroke(cyan, lineWidth: 2)
+                        .frame(width: 86, height: 86)
+                    HexagonShape()
+                        .stroke(cyan, lineWidth: 1.4)
+                        .frame(width: 30, height: 30)
+                }
+
+                Text("AETHER")
+                    .font(.system(size: 28, weight: .medium))
+                    .tracking(8)
+                    .foregroundColor(.white.opacity(0.95))
+
+                Text("workspace ready")
+                    .font(.system(size: 11, weight: .regular))
+                    .tracking(2)
+                    .foregroundColor(cyan.opacity(0.85))
+
+                // Tap-here CTA button. Just visual — the whole overlay is tappable.
+                Text("LET'S START")
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(3)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 44)
+                    .padding(.vertical, 14)
+                    .background(
+                        ZStack {
+                            Capsule().fill(Color.black.opacity(0.55))
+                            Capsule().stroke(cyan, lineWidth: 1.4)
+                        }
+                    )
+                    .padding(.top, 14)
+
+                Text("or hold the mic and speak")
+                    .font(.system(size: 10, weight: .regular))
+                    .tracking(1.4)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .padding(.horizontal, 40)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+                pulse = 1.0
+            }
+        }
+    }
+}
+
+private struct HexagonShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let cx = rect.midX
+        let cy = rect.midY
+        let r = min(rect.width, rect.height) / 2
+        for i in 0..<6 {
+            let angle = CGFloat(i) * .pi / 3 - .pi / 6
+            let x = cx + cos(angle) * r
+            let y = cy + sin(angle) * r
+            if i == 0 { p.move(to: CGPoint(x: x, y: y)) }
+            else { p.addLine(to: CGPoint(x: x, y: y)) }
+        }
+        p.closeSubpath()
         return p
     }
 }
