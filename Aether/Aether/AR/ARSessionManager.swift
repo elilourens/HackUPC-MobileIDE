@@ -773,6 +773,17 @@ final class ARSessionManager: NSObject, ObservableObject {
     func beginWorkspace() {
         guard !workspaceStarted else { return }
         workspaceStarted = true
+        // Phone IDE has already seeded an initial index.html (ArcReact splash)
+        // — when AR wakes up, surface that into the editor panel + preview so
+        // the live IDE flow has content to render from the first frame.
+        if session.hasAnyCode {
+            panelManager?.enterLiveIDEMode()
+            panelManager?.materializePreview()
+            panelManager?.setEditorCode(session.currentCode, animated: false)
+            panelManager?.setLiveFiles(active: session.currentFile,
+                                       files: Array(session.projectFiles.keys).sorted())
+            loadAndApplyPreview(code: session.currentCode, settleDelay: 0.5)
+        }
         panelManager?.materializeBasePanels()
         // Speak welcome a hair AFTER the assistant panel has begun materializing
         // so the bubble is visible while JARVIS talks.

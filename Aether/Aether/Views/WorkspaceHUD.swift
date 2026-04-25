@@ -331,9 +331,9 @@ private struct LetsStartOverlay: View {
                         .frame(width: 30, height: 30)
                 }
 
-                Text("AETHER")
-                    .font(.system(size: 28, weight: .medium))
-                    .tracking(8)
+                Text("ArcReact")
+                    .font(.system(size: 30, weight: .semibold))
+                    .tracking(2)
                     .foregroundColor(.white.opacity(0.95))
 
                 Text("workspace ready")

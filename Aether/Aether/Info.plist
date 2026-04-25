@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Aether</string>
+	<string>ArcReact</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -48,11 +48,11 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>AETHER uses the camera for AR workspace and hand tracking</string>
+	<string>ArcReact uses the camera for AR workspace and hand tracking</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>AETHER uses the microphone for voice commands</string>
+	<string>ArcReact uses the microphone for voice commands</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>AETHER uses speech recognition for voice coding</string>
+	<string>ArcReact uses speech recognition for voice coding</string>
 	<key>arkit</key>
 	<true/>
 </dict>

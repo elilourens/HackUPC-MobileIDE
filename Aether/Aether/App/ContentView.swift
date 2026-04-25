@@ -53,9 +53,24 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
+        .overlay(
+            // Any shake toggles between phone IDE and AR. Decorative — sits on top
+            // but never absorbs touches.
+            ShakeDetectorView { toggleMode() }
+                .allowsHitTesting(false)
+        )
         .animation(.easeInOut(duration: 0.35), value: phase)
         .onAppear {
             sessionManager.onRequestPhoneMode = { exitAR() }
+        }
+    }
+
+    private func toggleMode() {
+        switch phase {
+        case .phoneIDE:
+            enterAR()
+        case .placement, .workspace:
+            exitAR()
         }
     }
 

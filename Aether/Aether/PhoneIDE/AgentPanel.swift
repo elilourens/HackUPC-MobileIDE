@@ -28,7 +28,7 @@ struct AgentPanel: View {
     private var header: some View {
         HStack(spacing: 8) {
             Circle().fill(IJ.accentBlue).frame(width: 8, height: 8)
-            Text("aether")
+            Text("arcreact")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(IJ.textPrimary)
             Spacer()
@@ -55,7 +55,7 @@ struct AgentPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if session.chatMessages.isEmpty {
-                        Text("Ask Aether to build something. Try: \"a landing page for a coffee subscription startup\".")
+                        Text("Ask ArcReact to build something. Try: \"a landing page for a coffee subscription startup\".")
                             .font(.system(size: 12))
                             .foregroundColor(IJ.textSecondary)
                             .padding(.horizontal, 14)
@@ -86,7 +86,7 @@ struct AgentPanel: View {
             HStack(spacing: 8) {
                 ZStack(alignment: .leading) {
                     if draft.isEmpty {
-                        Text("Ask Aether…")
+                        Text("Ask ArcReact…")
                             .font(.system(size: 13))
                             .foregroundColor(IJ.textDisabled)
                             .padding(.leading, 12)

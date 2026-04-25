@@ -97,6 +97,15 @@ final class ProjectSession: ObservableObject {
         self.gitHubRepo  = d.string(forKey: Self.kGitHubRepo) ?? ""
         self.backendURL  = d.string(forKey: Self.kBackendURL) ?? "http://localhost:8000"
         self.jarvisVoiceEnabled = d.object(forKey: Self.kJarvisOn) as? Bool ?? true
+        seedStarterPageIfNeeded()
+    }
+
+    /// First-launch seed: drop the JetBrains-style ArcReact splash into
+    /// `index.html` so the editor + preview have something to render. No-op if
+    /// the user already has any code.
+    func seedStarterPageIfNeeded() {
+        guard !hasAnyCode else { return }
+        setCode(StarterPage.html, forFile: "index.html", pushHistory: false)
     }
 
     // MARK: - Derived

@@ -34,6 +34,8 @@
 		F200000000000000000000D5 /* PhoneIDEView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D5 /* PhoneIDEView.swift */; };
 		F200000000000000000000D6 /* BackendClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D6 /* BackendClient.swift */; };
 		F200000000000000000000D7 /* GitHubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D7 /* GitHubClient.swift */; };
+		F200000000000000000000D8 /* ShakeDetectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D8 /* ShakeDetectorView.swift */; };
+		F200000000000000000000D9 /* StarterPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D9 /* StarterPage.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +68,8 @@
 		F100000000000000000000D5 /* PhoneIDEView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneIDEView.swift; sourceTree = "<group>"; };
 		F100000000000000000000D6 /* BackendClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendClient.swift; sourceTree = "<group>"; };
 		F100000000000000000000D7 /* GitHubClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubClient.swift; sourceTree = "<group>"; };
+		F100000000000000000000D8 /* ShakeDetectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShakeDetectorView.swift; sourceTree = "<group>"; };
+		F100000000000000000000D9 /* StarterPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarterPage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -149,6 +153,7 @@
 			children = (
 				F100000000000000000000AA /* PlacementView.swift */,
 				F100000000000000000000AB /* WorkspaceHUD.swift */,
+				F100000000000000000000D8 /* ShakeDetectorView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -189,6 +194,7 @@
 				F100000000000000000000D3 /* AgentPanel.swift */,
 				F100000000000000000000D4 /* SettingsSheet.swift */,
 				F100000000000000000000D5 /* PhoneIDEView.swift */,
+				F100000000000000000000D9 /* StarterPage.swift */,
 			);
 			path = PhoneIDE;
 			sourceTree = "<group>";
@@ -297,6 +303,8 @@
 				F200000000000000000000D5 /* PhoneIDEView.swift in Sources */,
 				F200000000000000000000D6 /* BackendClient.swift in Sources */,
 				F200000000000000000000D7 /* GitHubClient.swift in Sources */,
+				F200000000000000000000D8 /* ShakeDetectorView.swift in Sources */,
+				F200000000000000000000D9 /* StarterPage.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
