@@ -1,7 +1,7 @@
 import Foundation
 
 /// OpenAI GPT-4o wrapper for generating and modifying full single-file HTML pages.
-/// (Gemini still handles "hey jarvis" Q&A — see GeminiClient.swift.)
+/// (`GeminiClient` call sites now also route to OpenAI for "hey jarvis" Q&A.)
 /// Always returns raw HTML; markdown fences and stray "html" prefixes are stripped.
 final class CodeGenerator {
     static let shared = CodeGenerator()

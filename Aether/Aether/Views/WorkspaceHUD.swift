@@ -5,6 +5,7 @@ struct WorkspaceHUD: View {
     @ObservedObject var voiceManager: VoiceManager
     /// Tap on the "Phone" pill returns to PhoneIDEView. Wired from ContentView.
     var onRequestPhoneMode: (() -> Void)? = nil
+    @State private var scenePickerShown: Bool = false
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -102,6 +103,21 @@ struct WorkspaceHUD: View {
             // tinting matches the IntelliJ-Islands neutral palette.
             VStack {
                 HStack {
+                    Button(action: { withAnimation(.easeOut(duration: 0.2)) { scenePickerShown.toggle() } }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "sparkles.rectangle.stack")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Scene")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
+                    }
+                    .padding(.top, 56)
+                    .padding(.leading, 14)
                     Spacer()
                     Button(action: { onRequestPhoneMode?() }) {
                         HStack(spacing: 6) {
@@ -121,6 +137,23 @@ struct WorkspaceHUD: View {
                     .padding(.trailing, 18)
                 }
                 Spacer()
+            }
+
+            if scenePickerShown {
+                VStack {
+                    HStack {
+                        SpatialScenePicker(selected: sessionManager.selectedSpatialScene) { scene in
+                            sessionManager.selectSpatialScene(scene)
+                            withAnimation(.easeOut(duration: 0.2)) { scenePickerShown = false }
+                        }
+                        .padding(.top, 96)
+                        .padding(.leading, 14)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .zIndex(50)
             }
 
             // Preview-scroll arrows (right edge, vertically centered). Only shown

@@ -403,6 +403,22 @@ final class PanelManager {
         }
     }
 
+    /// Visual polish for spatial-scene swaps: subtle scale pulse around all visible panels.
+    func pulseSceneSwitch() {
+        for panel in panels.values where panel.isEnabled {
+            let start = panel.transform
+            let pulse = Transform(
+                scale: SIMD3<Float>(start.scale.x * 1.025, start.scale.y * 1.025, start.scale.z),
+                rotation: start.rotation,
+                translation: start.translation
+            )
+            panel.move(to: pulse, relativeTo: panel.parent, duration: 0.12, timingFunction: .easeOut)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.13) {
+                panel.move(to: start, relativeTo: panel.parent, duration: 0.18, timingFunction: .easeInOut)
+            }
+        }
+    }
+
     func cycleEditorTab(forward: Bool) {
         activeTab = (activeTab + (forward ? 1 : -1) + 2) % 2
         regenerateEditor()

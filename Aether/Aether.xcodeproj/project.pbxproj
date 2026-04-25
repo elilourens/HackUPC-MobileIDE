@@ -41,6 +41,12 @@
 		F200000000000000000000DC /* JBIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DC /* JBIcon.swift */; };
 		F200000000000000000000DD /* WelcomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DD /* WelcomeScreen.swift */; };
 		F200000000000000000000DE /* DevicePerformanceProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DE /* DevicePerformanceProfile.swift */; };
+		F200000000000000000000DF /* SpatialScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000DF /* SpatialScene.swift */; };
+		F200000000000000000000E0 /* SpatialSceneManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E0 /* SpatialSceneManager.swift */; };
+		F200000000000000000000E1 /* SpatialScenePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E1 /* SpatialScenePicker.swift */; };
+		F200000000000000000000E2 /* cambridge_4k.exr in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E2 /* cambridge_4k.exr */; };
+		F200000000000000000000E3 /* canary_wharf_4k.exr in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E3 /* canary_wharf_4k.exr */; };
+		F200000000000000000000E4 /* pretoria_gardens_4k.exr in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E4 /* pretoria_gardens_4k.exr */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -80,6 +86,12 @@
 		F100000000000000000000DC /* JBIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JBIcon.swift; sourceTree = "<group>"; };
 		F100000000000000000000DD /* WelcomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeScreen.swift; sourceTree = "<group>"; };
 		F100000000000000000000DE /* DevicePerformanceProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevicePerformanceProfile.swift; sourceTree = "<group>"; };
+		F100000000000000000000DF /* SpatialScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialScene.swift; sourceTree = "<group>"; };
+		F100000000000000000000E0 /* SpatialSceneManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialSceneManager.swift; sourceTree = "<group>"; };
+		F100000000000000000000E1 /* SpatialScenePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialScenePicker.swift; sourceTree = "<group>"; };
+		F100000000000000000000E2 /* cambridge_4k.exr */ = {isa = PBXFileReference; lastKnownFileType = file; path = cambridge_4k.exr; sourceTree = "<group>"; };
+		F100000000000000000000E3 /* canary_wharf_4k.exr */ = {isa = PBXFileReference; lastKnownFileType = file; path = canary_wharf_4k.exr; sourceTree = "<group>"; };
+		F100000000000000000000E4 /* pretoria_gardens_4k.exr */ = {isa = PBXFileReference; lastKnownFileType = file; path = pretoria_gardens_4k.exr; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,8 +148,19 @@
 				F100000000000000000000A6 /* PanelEntity.swift */,
 				F100000000000000000000DE /* DevicePerformanceProfile.swift */,
 				F100000000000000000000B2 /* HoloElements.swift */,
+				F300000000000000000000DF /* SpatialScenes */,
 			);
 			path = AR;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000DF /* SpatialScenes */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000DF /* SpatialScene.swift */,
+				F100000000000000000000E0 /* SpatialSceneManager.swift */,
+				F100000000000000000000E1 /* SpatialScenePicker.swift */,
+			);
+			path = SpatialScenes;
 			sourceTree = "<group>";
 		};
 		F300000000000000000000A4 /* Gestures */ = {
@@ -175,8 +198,19 @@
 			children = (
 				F100000000000000000000AC /* Assets.xcassets */,
 				F100000000000000000000DB /* JBIcons */,
+				F300000000000000000000E0 /* EnvironmentMaps */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		F300000000000000000000E0 /* EnvironmentMaps */ = {
+			isa = PBXGroup;
+			children = (
+				F100000000000000000000E2 /* cambridge_4k.exr */,
+				F100000000000000000000E3 /* canary_wharf_4k.exr */,
+				F100000000000000000000E4 /* pretoria_gardens_4k.exr */,
+			);
+			path = EnvironmentMaps;
 			sourceTree = "<group>";
 		};
 		F300000000000000000000A8 /* Products */ = {
@@ -283,6 +317,9 @@
 			files = (
 				F200000000000000000000AC /* Assets.xcassets in Resources */,
 				F200000000000000000000DB /* JBIcons in Resources */,
+				F200000000000000000000E2 /* cambridge_4k.exr in Resources */,
+				F200000000000000000000E3 /* canary_wharf_4k.exr in Resources */,
+				F200000000000000000000E4 /* pretoria_gardens_4k.exr in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -325,6 +362,9 @@
 				F200000000000000000000DC /* JBIcon.swift in Sources */,
 				F200000000000000000000DD /* WelcomeScreen.swift in Sources */,
 				F200000000000000000000DE /* DevicePerformanceProfile.swift in Sources */,
+				F200000000000000000000DF /* SpatialScene.swift in Sources */,
+				F200000000000000000000E0 /* SpatialSceneManager.swift in Sources */,
+				F200000000000000000000E1 /* SpatialScenePicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -458,7 +498,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = 472PHZCF99;
+				DEVELOPMENT_TEAM = 76VMG5HC38;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Aether/Info.plist;
@@ -488,7 +528,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = 472PHZCF99;
+				DEVELOPMENT_TEAM = 76VMG5HC38;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Aether/Info.plist;

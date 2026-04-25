@@ -27,6 +27,7 @@ final class ARSessionManager: NSObject, ObservableObject {
     @Published var aiBubbleText: String = "Listening..."
     @Published var aiBubbleHighlight: BubbleHighlight = .none
     @Published var voiceTranscript: String = ""
+    @Published private(set) var selectedSpatialScene: SpatialScene = SpatialSceneManager.loadPersistedScene()
 
     // MARK: AR
     weak var arView: ARView?
@@ -38,6 +39,7 @@ final class ARSessionManager: NSObject, ObservableObject {
     private let performanceProfile = DevicePerformanceProfile.current
     nonisolated(unsafe) private var lastHandProcessTime: TimeInterval = 0
     nonisolated(unsafe) private var lastPlacementTickTime: TimeInterval = 0
+    private let spatialSceneManager = SpatialSceneManager()
 
     // MARK: Phase 2 — Live IDE
     /// Shared with PhoneIDEView. Owned at the App level so edits in either mode
@@ -119,6 +121,8 @@ final class ARSessionManager: NSObject, ObservableObject {
         }
 
         installPlacementIndicator()
+        spatialSceneManager.updateContext(arView: arView, workspaceAnchor: workspaceAnchor)
+        spatialSceneManager.apply(scene: selectedSpatialScene, panelManager: panelManager, animated: false)
     }
 
     private func installPlacementIndicator() {
@@ -336,6 +340,8 @@ final class ARSessionManager: NSObject, ObservableObject {
         panelManager = pm
         workspaceAnchor = anchor
         workspacePlaced = true
+        spatialSceneManager.updateContext(arView: arView, workspaceAnchor: anchor)
+        spatialSceneManager.apply(scene: selectedSpatialScene, panelManager: pm, animated: false)
         return true
     }
 
@@ -848,6 +854,12 @@ final class ARSessionManager: NSObject, ObservableObject {
     /// True when there's a live preview to scroll (used to gate the HUD arrows).
     var hasLivePreview: Bool {
         !session.currentCode.isEmpty
+    }
+
+    func selectSpatialScene(_ scene: SpatialScene) {
+        selectedSpatialScene = scene
+        spatialSceneManager.updateContext(arView: arView, workspaceAnchor: workspaceAnchor)
+        spatialSceneManager.apply(scene: scene, panelManager: panelManager, animated: true)
     }
 
     func beginWorkspace() {

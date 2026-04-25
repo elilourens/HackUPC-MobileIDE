@@ -49,3 +49,21 @@ Run conversation mode test:
 ```bash
 PYTHONPATH=. python3 tests/test_conversation_mode.py --voice
 ```
+
+## Spatial Scenes
+
+The AETHER AR workspace supports switchable scene ambience.
+
+- EXR assets live in `Aether/Aether/Resources/EnvironmentMaps/`
+  - `cambridge_4k.exr`
+  - `canary_wharf_4k.exr`
+  - `pretoria_gardens_4k.exr`
+- Scene picker is in the AR Workspace HUD via the **Scene** button.
+- Available scenes:
+  - Cambridge
+  - Canary Wharf
+  - Pretoria Gardens
+  - Focus Mode
+- **Real World** returns the workspace to normal camera passthrough AR.
+- The app attempts EXR loading for environment ambience and logs success/failure.
+  If EXR usage is unavailable at runtime, it automatically falls back to procedural scene visuals.
