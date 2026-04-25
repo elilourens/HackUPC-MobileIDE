@@ -709,13 +709,14 @@ final class PanelManager {
     private static let darkPalette = JarvisPalette(
         bg:          UIColor(red:  8/255, green: 12/255, blue: 20/255, alpha: 0.65),
         bgDarker:    UIColor(red:  4/255, green:  7/255, blue: 12/255, alpha: 0.72),
-        cyan:        UIColor(red:   0,    green: 212/255, blue: 255/255, alpha: 1.0),
-        cyanDim:     UIColor(red:   0,    green: 212/255, blue: 255/255, alpha: 0.55),
-        cyanFaint:   UIColor(red:   0,    green: 212/255, blue: 255/255, alpha: 0.18),
-        lightBlue:   UIColor(red: 88/255, green: 166/255, blue: 255/255, alpha: 1.0),
-        textPrimary: UIColor(red: 230/255, green: 240/255, blue: 250/255, alpha: 1.0),
-        textDim:     UIColor(red: 120/255, green: 145/255, blue: 180/255, alpha: 1.0),
-        scanLine:    UIColor(red:   0,    green: 212/255, blue: 255/255, alpha: 0.10),
+        // Cyan/lightBlue re-routed to neutral grey — no blue in the AR experience.
+        cyan:        UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 1.0),
+        cyanDim:     UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 0.55),
+        cyanFaint:   UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 0.18),
+        lightBlue:   UIColor(red: 188/255, green: 190/255, blue: 196/255, alpha: 1.0),
+        textPrimary: UIColor(red: 230/255, green: 232/255, blue: 236/255, alpha: 1.0),
+        textDim:     UIColor(red: 140/255, green: 145/255, blue: 152/255, alpha: 1.0),
+        scanLine:    UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 0.10),
         synKeyword:  UIColor(red: 1.00, green: 0.48, blue: 0.71, alpha: 1),
         synFunction: UIColor(red: 0.70, green: 0.57, blue: 0.94, alpha: 1),
         synString:   UIColor(red: 0.34, green: 0.85, blue: 0.91, alpha: 1),
@@ -727,13 +728,14 @@ final class PanelManager {
     private static let lightPalette = JarvisPalette(
         bg:          UIColor(red: 245/255, green: 248/255, blue: 252/255, alpha: 0.78),
         bgDarker:    UIColor(red: 235/255, green: 240/255, blue: 248/255, alpha: 0.85),
-        cyan:        UIColor(red:   0,    green: 122/255, blue: 180/255, alpha: 1.0),
-        cyanDim:     UIColor(red:   0,    green: 122/255, blue: 180/255, alpha: 0.65),
-        cyanFaint:   UIColor(red:   0,    green: 122/255, blue: 180/255, alpha: 0.22),
-        lightBlue:   UIColor(red: 38/255, green: 96/255,  blue: 180/255, alpha: 1.0),
+        // Cyan/lightBlue re-routed to neutral grey — no blue in the AR experience.
+        cyan:        UIColor(red: 110/255, green: 115/255, blue: 122/255, alpha: 1.0),
+        cyanDim:     UIColor(red: 110/255, green: 115/255, blue: 122/255, alpha: 0.65),
+        cyanFaint:   UIColor(red: 110/255, green: 115/255, blue: 122/255, alpha: 0.22),
+        lightBlue:   UIColor(red:  90/255, green:  95/255, blue: 100/255, alpha: 1.0),
         textPrimary: UIColor(red: 12/255, green: 18/255,  blue: 28/255,  alpha: 1.0),
-        textDim:     UIColor(red: 90/255, green: 105/255, blue: 130/255, alpha: 1.0),
-        scanLine:    UIColor(red:   0,    green: 122/255, blue: 180/255, alpha: 0.06),
+        textDim:     UIColor(red: 90/255, green:  95/255, blue: 100/255, alpha: 1.0),
+        scanLine:    UIColor(red: 110/255, green: 115/255, blue: 122/255, alpha: 0.06),
         synKeyword:  UIColor(red: 0.78, green: 0.13, blue: 0.46, alpha: 1),
         synFunction: UIColor(red: 0.46, green: 0.27, blue: 0.78, alpha: 1),
         synString:   UIColor(red: 0.10, green: 0.50, blue: 0.62, alpha: 1),
@@ -759,8 +761,8 @@ final class PanelManager {
         static let border      = UIColor(red:  57/255, green:  59/255, blue:  64/255, alpha: 1.00) // #393B40
         static let borderSoft  = UIColor(red:  57/255, green:  59/255, blue:  64/255, alpha: 0.40)
         static let connector   = UIColor(red:  57/255, green:  59/255, blue:  64/255, alpha: 0.30)
-        // UI accents
-        static let accentBlue  = UIColor(red:  74/255, green: 136/255, blue: 199/255, alpha: 1) // #4A88C7
+        // UI accents — neutral light grey instead of blue per art direction
+        static let accentBlue  = UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 1) // #A8ADB3
         static let accentGreen = UIColor(red:  89/255, green: 168/255, blue: 105/255, alpha: 1) // #59A869
         static let accentRed   = UIColor(red: 199/255, green:  84/255, blue:  80/255, alpha: 1)
         // Text

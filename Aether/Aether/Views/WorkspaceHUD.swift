@@ -22,7 +22,7 @@ struct WorkspaceHUD: View {
             VStack {
                 HStack(spacing: 10) {
                     Circle()
-                        .fill(sessionManager.handDetected ? Color(red: 0.0, green: 0.83, blue: 1.0) : Color.gray)
+                        .fill(sessionManager.handDetected ? Color(red: 168/255, green: 173/255, blue: 179/255) : Color.gray)
                         .frame(width: 8, height: 8)
                     Text(gestureLabel)
                         .font(.system(size: 14, weight: .medium))
@@ -55,7 +55,7 @@ struct WorkspaceHUD: View {
                         Circle()
                             .fill(voiceManager.isPushToTalkActive
                                   ? Color(red: 1.0, green: 0.30, blue: 0.45)
-                                  : Color(red: 0.0, green: 0.83, blue: 1.0))
+                                  : Color(red: 168/255, green: 173/255, blue: 179/255))
                             .frame(width: 6, height: 6)
                         Text(transcriptDisplay)
                             .font(.system(size: 13, weight: .regular))
@@ -148,7 +148,7 @@ struct WorkspaceHUD: View {
 private struct MicButton: View {
     let isActive: Bool
     @State private var pulsePhase: Double = 0
-    private let cyan = Color(red: 0.0, green: 0.83, blue: 1.0)
+    private let cyan = Color(red: 168/255, green: 173/255, blue: 179/255)
     private let red  = Color(red: 1.0, green: 0.30, blue: 0.45)
 
     var body: some View {
@@ -199,7 +199,7 @@ private struct MicButton: View {
 
 private struct CornerHandle: View {
     let corner: Int  // 0 TL, 1 TR, 2 BL, 3 BR
-    private let cyan = Color(red: 0.0, green: 0.83, blue: 1.0)
+    private let cyan = Color(red: 168/255, green: 173/255, blue: 179/255)
     private let size: CGFloat = 36
 
     var body: some View {
@@ -252,7 +252,7 @@ private struct CornerBracketShape: Shape {
 /// (the prompt covers the full HUD area transparently) fires `onTap`.
 private struct LetsStartOverlay: View {
     let onTap: () -> Void
-    private let cyan = Color(red: 0.0, green: 0.83, blue: 1.0)
+    private let cyan = Color(red: 168/255, green: 173/255, blue: 179/255)
     @State private var pulse: CGFloat = 0
 
     var body: some View {
@@ -369,7 +369,7 @@ private struct HandSkeletonOverlay: View {
                             let pp = CGPoint(x: p.x * scale + offsetX, y: p.y * scale + offsetY)
                             let dotR: CGFloat = 2.5
                             ctx.fill(Path(ellipseIn: CGRect(x: pp.x - dotR, y: pp.y - dotR, width: dotR * 2, height: dotR * 2)),
-                                     with: .color(Color(red: 0.30, green: 0.65, blue: 1.0)))
+                                     with: .color(Color(red: 168/255, green: 173/255, blue: 179/255)))
                         }
                     }
                     .frame(width: geo.size.width, height: geo.size.height)

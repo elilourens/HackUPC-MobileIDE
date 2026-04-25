@@ -33,8 +33,8 @@ final class PanelEntity: Entity, HasModel {
         self.widthMeters = width
         self.heightMeters = height
 
-        // Cyan halo plane (slightly larger, sits behind the surface). Creates the holographic glow.
-        let glowColor = UIColor(red: 0.0, green: 212/255.0, blue: 255/255.0, alpha: 0.18)
+        // Neutral grey halo plane (slightly larger, sits behind the surface). Creates a soft hover glow without any blue.
+        let glowColor = UIColor(red: 168/255.0, green: 173/255.0, blue: 179/255.0, alpha: 0.18)
         var borderMat = UnlitMaterial(color: glowColor)
         borderMat.blending = .transparent(opacity: .init(floatLiteral: 1.0))
         let borderMesh = MeshResource.generatePlane(width: width + 0.012, height: height + 0.012, cornerRadius: 0.0)
@@ -113,7 +113,7 @@ final class PanelEntity: Entity, HasModel {
         else if hovered { alpha = 0.40 }
         else { alpha = 0.18 }
         alpha *= CGFloat(globalOpacity)
-        let color = UIColor(red: 0.0, green: 212/255.0, blue: 255/255.0, alpha: alpha)
+        let color = UIColor(red: 168/255.0, green: 173/255.0, blue: 179/255.0, alpha: alpha)
         var mat = UnlitMaterial(color: color)
         mat.blending = .transparent(opacity: .init(floatLiteral: 1.0))
         border.model?.materials = [mat]

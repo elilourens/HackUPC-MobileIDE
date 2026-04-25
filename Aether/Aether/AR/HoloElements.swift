@@ -5,17 +5,21 @@ import simd
 
 /// Shared palette + factory helpers for the holographic AR elements.
 enum Holo {
-    static let cyan       = UIColor(red:   0,    green: 212/255, blue: 255/255, alpha: 1.0)
-    static let cyanBright = UIColor(red: 100/255, green: 230/255, blue: 255/255, alpha: 1.0)
-    static let cyanDim    = UIColor(red:   0,    green: 212/255, blue: 255/255, alpha: 0.55)
-    static let cyanFaint  = UIColor(red:   0,    green: 212/255, blue: 255/255, alpha: 0.25)
-    static let lightBlue  = UIColor(red:  88/255, green: 166/255, blue: 255/255, alpha: 1.0)
+    // Legacy "cyan" / "lightBlue" tokens re-routed to neutral greys. The names
+    // stick around so call sites don't churn — but no blue is rendered.
+    static let cyan       = UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 1.0)
+    static let cyanBright = UIColor(red: 200/255, green: 204/255, blue: 210/255, alpha: 1.0)
+    static let cyanDim    = UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 0.55)
+    static let cyanFaint  = UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 0.25)
+    static let lightBlue  = UIColor(red: 188/255, green: 190/255, blue: 196/255, alpha: 1.0)
 
     // IntelliJ Islands palette for ambient AR elements (replaces the cyan
     // signature on the desk circle, git timeline, etc).
-    static let intelBlue       = UIColor(red:  74/255, green: 136/255, blue: 199/255, alpha: 1.00) // #4A88C7
-    static let intelBlueDim    = UIColor(red:  74/255, green: 136/255, blue: 199/255, alpha: 0.55)
-    static let intelBlueFaint  = UIColor(red:  74/255, green: 136/255, blue: 199/255, alpha: 0.20)
+    // Renamed in spirit only — these now resolve to a neutral light grey, no
+    // blue anywhere in the AR experience.
+    static let intelBlue       = UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 1.00) // #A8ADB3
+    static let intelBlueDim    = UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 0.55)
+    static let intelBlueFaint  = UIColor(red: 168/255, green: 173/255, blue: 179/255, alpha: 0.20)
     static let intelGreen      = UIColor(red:  89/255, green: 168/255, blue: 105/255, alpha: 1.00) // #59A869
     static let intelGreenBright = UIColor(red: 110/255, green: 195/255, blue: 130/255, alpha: 1.00)
     static let intelGrey       = UIColor(red: 111/255, green: 115/255, blue: 122/255, alpha: 0.85) // #6F737A
