@@ -366,6 +366,13 @@ final class PanelManager {
         panels[kind]?.position
     }
 
+    /// Local-space frame for 2D desk mode (XZ layout → screen x/y; includes current uniform scale).
+    func panelDeskFrame(_ kind: PanelKind) -> (pos: SIMD3<Float>, w: Float, h: Float)? {
+        guard let p = panels[kind], p.isEnabled else { return nil }
+        let s = p.transform.scale.x
+        return (p.position, p.widthMeters * s, p.heightMeters * s)
+    }
+
     func setPanelLocalPosition(_ kind: PanelKind, position: SIMD3<Float>) {
         panels[kind]?.position = position
     }
@@ -621,6 +628,17 @@ final class PanelManager {
         liveActiveFile = active
         liveFiles = files
         regenerateEditor()
+    }
+
+    /// Same file list + active tab the AR editor texture uses (for 2D desk sidebar).
+    func deskSidebarFileRows() -> (files: [String], active: String) {
+        if !liveFiles.isEmpty, let a = liveActiveFile {
+            return (liveFiles, a)
+        }
+        if let a = liveActiveFile {
+            return ([a], a)
+        }
+        return (["index.html", "styles.css", "app.js", "package.json"], "index.html")
     }
 
     /// Switch the terminal to live mode and render the given log lines.

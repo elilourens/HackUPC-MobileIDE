@@ -26,11 +26,18 @@ struct ContentView: View {
             // AR is mounted whenever we've ever entered AR — keeps the AR session,
             // anchor, and panel state alive across mode switches.
             let arVisible: Bool = phase == .placement || phase == .workspace
+            let hideARFor2DDesk = phase == .workspace && sessionManager.deskModeEnabled && sessionManager.workspaceStarted
             if arPlacedOnce || arVisible {
                 ARWorkspaceView(sessionManager: sessionManager)
                     .ignoresSafeArea()
-                    .opacity(arVisible ? 1 : 0)
-                    .allowsHitTesting(arVisible)
+                    .opacity(arVisible && !hideARFor2DDesk ? 1 : 0)
+                    .allowsHitTesting(arVisible && !hideARFor2DDesk)
+            }
+
+            if phase == .workspace, sessionManager.deskModeEnabled, sessionManager.workspaceStarted {
+                Desk2DWorkspaceView(sessionManager: sessionManager, projectSession: session)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
             }
 
             switch phase {
@@ -43,15 +50,27 @@ struct ContentView: View {
                     .ignoresSafeArea()
                     .transition(.opacity)
             case .placement:
-                PlacementView(sessionManager: sessionManager) {
-                    if sessionManager.placeWorkspace() {
-                        arPlacedOnce = true
-                        withAnimation(.easeInOut(duration: 0.5)) {
-                            phase = .workspace
+                PlacementView(
+                    sessionManager: sessionManager,
+                    onPlace: {
+                        if sessionManager.placeWorkspace() {
+                            arPlacedOnce = true
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                phase = .workspace
+                            }
+                            startVoicePipeline()
                         }
-                        startVoicePipeline()
+                    },
+                    onUseFlatWorkspace: {
+                        if sessionManager.placeWorkspaceFlatAtOrigin() {
+                            arPlacedOnce = true
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                phase = .workspace
+                            }
+                            startVoicePipeline()
+                        }
                     }
-                }
+                )
                 .transition(.opacity)
             case .workspace:
                 WorkspaceHUD(sessionManager: sessionManager,
@@ -69,6 +88,9 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.35), value: phase)
         .onAppear {
             sessionManager.onRequestPhoneMode = { exitAR() }
+            sessionManager.onRequestPlacement = {
+                withAnimation(.easeInOut(duration: 0.35)) { phase = .placement }
+            }
         }
     }
 
@@ -98,6 +120,7 @@ struct ContentView: View {
     }
 
     private func exitAR() {
+        sessionManager.setDeskModeEnabled(false)
         withAnimation(.easeInOut(duration: 0.35)) { phase = .phoneIDE }
     }
 

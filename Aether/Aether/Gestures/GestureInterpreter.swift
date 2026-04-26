@@ -20,10 +20,10 @@ final class GestureInterpreter {
         let littleExtended = extended.little
         let thumbExtended = extended.thumb
 
-        // Pinch: thumb tip near index tip
+        // Pinch: thumb tip near index tip (do not require middle extended — that blocked natural pinches on many hands / slower Vision cadence).
         if let thumb = landmarks.point(.thumbTip), let index = landmarks.point(.indexTip) {
             let d = distance(thumb, index)
-            if d < 0.045 && middleExtended {
+            if d < 0.055 {
                 return .pinch
             }
         }

@@ -29,12 +29,9 @@ enum DevicePerformanceProfile {
         !isConstrained
     }
 
-    var enablePeopleOcclusion: Bool {
-        !isConstrained
-    }
-
     var handTrackingInterval: TimeInterval {
-        isConstrained ? (1.0 / 12.0) : (1.0 / 30.0)
+        // 2018 iPad Pro: keep Vision hand work above ~12 Hz so pinch/grab stays responsive.
+        isConstrained ? (1.0 / 22.0) : (1.0 / 30.0)
     }
 
     var placementTickInterval: TimeInterval {

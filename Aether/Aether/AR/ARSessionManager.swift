@@ -28,6 +28,8 @@ final class ARSessionManager: NSObject, ObservableObject {
     @Published var aiBubbleHighlight: BubbleHighlight = .none
     @Published var voiceTranscript: String = ""
     @Published private(set) var selectedSpatialScene: SpatialScene = SpatialSceneManager.loadPersistedScene()
+    /// When true, AR is paused and `Desk2DWorkspaceView` shows the same panel layout in flat SwiftUI.
+    @Published private(set) var deskModeEnabled: Bool
 
     // MARK: AR
     weak var arView: ARView?
@@ -47,14 +49,43 @@ final class ARSessionManager: NSObject, ObservableObject {
     let session: ProjectSession
     private lazy var previewRenderer: PreviewRenderer = PreviewRenderer()
 
+    private static let deskModeDefaultsKey = "aether.desk.mode"
+
     init(session: ProjectSession) {
         self.session = session
+        self.deskModeEnabled = UserDefaults.standard.bool(forKey: Self.deskModeDefaultsKey)
         super.init()
+    }
+
+    /// Pauses the AR camera only when flat 2D desk mode is active *and* the workspace is live.
+    /// Avoids pausing during placement (or before “Let’s start”), which would freeze the camera if desk mode was left on in Settings / UserDefaults.
+    private func syncDeskModeSessionPause() {
+        guard let arView else { return }
+        guard deskModeEnabled, workspacePlaced, workspaceStarted else { return }
+        arView.session.pause()
+    }
+
+    /// Toggles flat 2D workspace: pauses AR (camera off) and shows `Desk2DWorkspaceView` with the same panel layout.
+    func setDeskModeEnabled(_ enabled: Bool) {
+        guard deskModeEnabled != enabled else { return }
+        deskModeEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.deskModeDefaultsKey)
+        guard let arView else { return }
+        if enabled {
+            syncDeskModeSessionPause()
+        } else {
+            let cfg = makeWorldTrackingConfiguration(for: selectedSpatialScene)
+            arView.session.run(cfg, options: [])
+        }
     }
 
     /// Callback fired when the user wants to leave AR mode and return to the phone IDE.
     /// Wired by ContentView to flip the top-level phase.
     var onRequestPhoneMode: (() -> Void)?
+
+    /// Callback fired when the user wants to re-place the workspace (double-tap recenter).
+    /// Wired by ContentView to flip the top-level phase back to `.placement`.
+    var onRequestPlacement: (() -> Void)?
 
     /// When true, the next preview-pointing tap selects an element instead of toggling
     /// panel selection. Set by the "select" voice command.
@@ -106,14 +137,7 @@ final class ARSessionManager: NSObject, ObservableObject {
 
     func attach(arView: ARView) {
         self.arView = arView
-        let config = ARWorldTrackingConfiguration()
-        config.planeDetection = [.horizontal]
-        config.environmentTexturing = performanceProfile.enableEnvironmentTexturing ? .automatic : .none
-        config.isLightEstimationEnabled = true
-        if performanceProfile.enablePeopleOcclusion,
-           type(of: config).supportsFrameSemantics(.personSegmentationWithDepth) {
-            config.frameSemantics.insert(.personSegmentationWithDepth)
-        }
+        let config = makeWorldTrackingConfiguration(for: selectedSpatialScene)
         arView.session.delegate = self
         arView.session.run(config, options: [.removeExistingAnchors, .resetTracking])
         if performanceProfile.isConstrained {
@@ -123,6 +147,7 @@ final class ARSessionManager: NSObject, ObservableObject {
         installPlacementIndicator()
         spatialSceneManager.updateContext(arView: arView, workspaceAnchor: workspaceAnchor)
         spatialSceneManager.apply(scene: selectedSpatialScene, panelManager: panelManager, animated: false)
+        syncDeskModeSessionPause()
     }
 
     private func installPlacementIndicator() {
@@ -328,6 +353,19 @@ final class ARSessionManager: NSObject, ObservableObject {
             let dz = camPos.z - anchorPos.z
             yaw = atan2(dx, dz)
         }
+
+        // Re-placement: a workspace already exists. Just relocate the existing anchor
+        // (panels are children, so their local layout is preserved 1:1).
+        if let existingAnchor = workspaceAnchor, let pm = panelManager {
+            existingAnchor.setPosition(anchorPos, relativeTo: nil)
+            existingAnchor.setOrientation(simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0)), relativeTo: nil)
+            existingAnchor.isEnabled = true
+            workspacePlaced = true
+            spatialSceneManager.updateContext(arView: arView, workspaceAnchor: existingAnchor)
+            spatialSceneManager.apply(scene: selectedSpatialScene, panelManager: pm, animated: false)
+            return true
+        }
+
         var anchorTransform = matrix_identity_float4x4
         anchorTransform.columns.3 = SIMD4<Float>(anchorPos.x, anchorPos.y, anchorPos.z, 1)
         let anchor = AnchorEntity(world: anchorTransform)
@@ -342,6 +380,53 @@ final class ARSessionManager: NSObject, ObservableObject {
         workspacePlaced = true
         spatialSceneManager.updateContext(arView: arView, workspaceAnchor: anchor)
         spatialSceneManager.apply(scene: selectedSpatialScene, panelManager: pm, animated: false)
+        return true
+    }
+
+    /// Double-tap (screen center) → drop back into the placement screen so the user
+    /// can pick a new flat surface. The existing `PanelManager` (and so the panel layout)
+    /// is preserved; on next `placeWorkspace()` we just relocate the workspace anchor.
+    func requestReplacement(doubleTapLocation: CGPoint) {
+        guard workspacePlaced, !deskModeEnabled,
+              let arView = arView,
+              let anchor = workspaceAnchor else { return }
+
+        let bounds = arView.bounds
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let dx = doubleTapLocation.x - center.x
+        let dy = doubleTapLocation.y - center.y
+        let maxDist = min(bounds.width, bounds.height) * 0.22
+        guard dx * dx + dy * dy <= maxDist * maxDist else { return }
+
+        anchor.isEnabled = false
+        workspacePlaced = false
+        hasDetectedSurface = false
+        placementTransform = nil
+        onRequestPlacement?()
+    }
+
+    /// Places the floating panels at a fixed world anchor without plane detection, then opens the flat 2D desk (AR camera paused).
+    @discardableResult
+    func placeWorkspaceFlatAtOrigin() -> Bool {
+        guard !workspacePlaced, let arView else { return false }
+
+        hidePlacementIndicator()
+
+        let anchor = AnchorEntity(world: matrix_identity_float4x4)
+        anchor.transform.rotation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+        arView.scene.addAnchor(anchor)
+
+        let pm = PanelManager()
+        pm.createPanels(on: anchor)
+        pm.attachSceneUpdates(arView: arView)
+        panelManager = pm
+        workspaceAnchor = anchor
+        workspacePlaced = true
+        spatialSceneManager.updateContext(arView: arView, workspaceAnchor: anchor)
+        spatialSceneManager.apply(scene: selectedSpatialScene, panelManager: pm, animated: false)
+
+        beginWorkspace()
+        setDeskModeEnabled(true)
         return true
     }
 
@@ -508,14 +593,14 @@ final class ARSessionManager: NSObject, ObservableObject {
         return chosen.0
     }
 
-    private func worldPositionForScreenPoint(_ point: CGPoint, depth: Float) -> SIMD3<Float>? {
+    /// Ray from the camera through a screen point (matches `worldPositionForScreenPoint` math).
+    private func cameraRayFromScreenPoint(_ point: CGPoint) -> (origin: SIMD3<Float>, direction: SIMD3<Float>)? {
         guard let arView = arView, let frame = arView.session.currentFrame else { return nil }
         let cam = frame.camera
         let viewportSize = arView.bounds.size
-        // Build a ray from the camera through the screen point, project to plane perpendicular to camera at given depth.
+        guard viewportSize.width > 0, viewportSize.height > 0 else { return nil }
         let normalizedX = Float((point.x / viewportSize.width) * 2 - 1)
         let normalizedY = Float((1 - point.y / viewportSize.height) * 2 - 1)
-        // Use ARKit's intrinsics through unprojectPoint.
         let projection = cam.projectionMatrix(for: .portrait, viewportSize: viewportSize, zNear: 0.001, zFar: 1000)
         let inverseProjection = projection.inverse
         let inverseView = cam.transform
@@ -525,8 +610,92 @@ final class ARSessionManager: NSObject, ObservableObject {
         let world4 = inverseView * eye
         let direction = simd_normalize(SIMD3<Float>(world4.x, world4.y, world4.z))
         let origin = SIMD3<Float>(inverseView.columns.3.x, inverseView.columns.3.y, inverseView.columns.3.z)
-        // Move along direction by `depth`.
+        return (origin, direction)
+    }
+
+    private func worldPositionForScreenPoint(_ point: CGPoint, depth: Float) -> SIMD3<Float>? {
+        guard let (origin, direction) = cameraRayFromScreenPoint(point) else { return nil }
         return origin + direction * depth
+    }
+
+    /// Intersection of the look ray with the horizontal plane `y = planeY` (in front of the camera).
+    private func horizontalPlaneHit(origin: SIMD3<Float>, direction: SIMD3<Float>, planeY: Float) -> SIMD3<Float>? {
+        guard abs(direction.y) > 1e-3 else { return nil }
+        let t = (planeY - origin.y) / direction.y
+        guard t > 0.05, t < 120 else { return nil }
+        let p = origin + direction * t
+        return SIMD3<Float>(p.x, planeY, p.z)
+    }
+
+    /// Double-tap (screen center): translate `workspaceAnchor` so the visible panels’ world centroid
+    /// moves to a comfortable point in front of the user along the current look direction.
+    func recenterWorkspaceClusterFromScreenCenter(doubleTapLocation: CGPoint) {
+        guard workspacePlaced, !deskModeEnabled,
+              let arView = arView,
+              let anchor = workspaceAnchor,
+              let pm = panelManager else { return }
+
+        let bounds = arView.bounds
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let dx = doubleTapLocation.x - center.x
+        let dy = doubleTapLocation.y - center.y
+        let maxDist = min(bounds.width, bounds.height) * 0.22
+        guard dx * dx + dy * dy <= maxDist * maxDist else { return }
+
+        var sum = SIMD3<Float>(0, 0, 0)
+        var count = 0
+        for kind in PanelKind.allCases {
+            guard pm.isPanelVisible(kind), let pos = pm.panelWorldPosition(kind)?.position else { continue }
+            sum += pos
+            count += 1
+        }
+        guard count > 0 else { return }
+        let centroid = sum / Float(count)
+
+        let screenCenter = center
+        guard let (origin, direction) = cameraRayFromScreenPoint(screenCenter) else { return }
+
+        // Keep recenter predictable: place the cluster at a fixed comfortable distance
+        // instead of raw plane-intersection distance (which can be very far on shallow rays).
+        let preferredDistance: Float = 0.85
+        let minDistance: Float = 0.55
+        let maxDistance: Float = 1.20
+
+        var lookXZ = SIMD2<Float>(direction.x, direction.z)
+        let lookLen = simd_length(lookXZ)
+        if lookLen < 1e-3 {
+            let fwd = currentCameraForward()
+            lookXZ = SIMD2<Float>(fwd.x, fwd.z)
+        }
+        let lookNorm = simd_normalize(lookXZ)
+
+        // If we can intersect at centroid height, use it but clamp to a comfy range.
+        var chosenDistance = preferredDistance
+        if let hit = horizontalPlaneHit(origin: origin, direction: direction, planeY: centroid.y) {
+            let hitDeltaXZ = SIMD2<Float>(hit.x - origin.x, hit.z - origin.z)
+            let hitDist = simd_length(hitDeltaXZ)
+            if hitDist.isFinite, hitDist > 0.01 {
+                chosenDistance = max(minDistance, min(maxDistance, hitDist))
+            }
+        }
+        let target = SIMD3<Float>(
+            origin.x + lookNorm.x * chosenDistance,
+            centroid.y,
+            origin.z + lookNorm.y * chosenDistance
+        )
+
+        // Solve transform in one shot:
+        // worldCentroid = anchorPos + (anchorYaw * centroidLocal)
+        // We choose anchorYaw to face the camera, then derive anchorPos so centroid lands exactly at `target`.
+        let centroidLocal = anchor.convert(position: centroid, from: nil)
+        let toCamera = SIMD2<Float>(origin.x - target.x, origin.z - target.z)
+        let yaw = simd_length(toCamera) > 1e-4 ? atan2(toCamera.x, toCamera.y) : 0
+        let rotation = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
+        let rotatedCentroidLocal = rotation.act(centroidLocal)
+        let newAnchorPos = target - rotatedCentroidLocal
+
+        anchor.setOrientation(rotation, relativeTo: nil)
+        anchor.setPosition(newAnchorPos, relativeTo: nil)
     }
 
     // MARK: AI bubble
@@ -860,6 +1029,40 @@ final class ARSessionManager: NSObject, ObservableObject {
         selectedSpatialScene = scene
         spatialSceneManager.updateContext(arView: arView, workspaceAnchor: workspaceAnchor)
         spatialSceneManager.apply(scene: scene, panelManager: panelManager, animated: true)
+        // Refresh frame semantics (person segmentation) without resetting the placed workspace.
+        // Keep AR paused while flat 2D desk mode is active (camera stays off).
+        if let arView, !deskModeEnabled {
+            arView.session.run(makeWorldTrackingConfiguration(for: scene), options: [])
+        }
+    }
+
+    private func makeWorldTrackingConfiguration(for spatialScene: SpatialScene) -> ARWorldTrackingConfiguration {
+        let config = ARWorldTrackingConfiguration()
+        config.planeDetection = [.horizontal]
+        config.environmentTexturing = performanceProfile.enableEnvironmentTexturing ? .automatic : .none
+        config.isLightEstimationEnabled = true
+        applyPersonSegmentation(to: config, spatialScene: spatialScene)
+        return config
+    }
+
+    /// Spatial HDR scenes: optionally occlude the synthetic background with the user (LiDAR depth only).
+    /// We intentionally do **not** enable ML-only `.personSegmentation` here: on many devices it mattes
+    /// the camera passthrough to near-black on hands before RealityKit composites HDR skyboxes, which reads
+    /// as a harsh “black glove” overlay.
+    private func applyPersonSegmentation(to config: ARWorldTrackingConfiguration, spatialScene: SpatialScene) {
+        let supportsDepth = ARWorldTrackingConfiguration.supportsFrameSemantics(.personSegmentationWithDepth)
+
+        if spatialScene.usesPersonMaskedPassthrough {
+            if supportsDepth {
+                config.frameSemantics.insert(.personSegmentationWithDepth)
+            }
+            return
+        }
+
+        // Passthrough “real world” / focus: keep LiDAR-backed segmentation on capable non-A12X-class devices only.
+        if !performanceProfile.isConstrained, supportsDepth {
+            config.frameSemantics.insert(.personSegmentationWithDepth)
+        }
     }
 
     func beginWorkspace() {
@@ -882,6 +1085,7 @@ final class ARSessionManager: NSObject, ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
             JarvisVoice.shared.speak("Hello sir. What are we working on today?")
         }
+        syncDeskModeSessionPause()
     }
 
     func runFakeAIResponse() {

@@ -18,6 +18,7 @@
 		F200000000000000000000A9 /* VoiceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000A9 /* VoiceManager.swift */; };
 		F200000000000000000000AA /* PlacementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000AA /* PlacementView.swift */; };
 		F200000000000000000000AB /* WorkspaceHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000AB /* WorkspaceHUD.swift */; };
+		F200000000000000000000E2 /* Desk2DWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000E2 /* Desk2DWorkspaceView.swift */; };
 		F200000000000000000000AC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000AC /* Assets.xcassets */; };
 		F200000000000000000000B0 /* JarvisVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B0 /* JarvisVoice.swift */; };
 		F200000000000000000000B1 /* GeminiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B1 /* GeminiClient.swift */; };
@@ -61,6 +62,7 @@
 		F100000000000000000000A9 /* VoiceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceManager.swift; sourceTree = "<group>"; };
 		F100000000000000000000AA /* PlacementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacementView.swift; sourceTree = "<group>"; };
 		F100000000000000000000AB /* WorkspaceHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHUD.swift; sourceTree = "<group>"; };
+		F100000000000000000000E2 /* Desk2DWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Desk2DWorkspaceView.swift; sourceTree = "<group>"; };
 		F100000000000000000000AC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F100000000000000000000AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F100000000000000000000AE /* Aether.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aether.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -177,6 +179,7 @@
 			children = (
 				F100000000000000000000AA /* PlacementView.swift */,
 				F100000000000000000000AB /* WorkspaceHUD.swift */,
+				F100000000000000000000E2 /* Desk2DWorkspaceView.swift */,
 				F100000000000000000000D8 /* ShakeDetectorView.swift */,
 				F100000000000000000000DA /* PlanHUDOverlay.swift */,
 			);
@@ -333,6 +336,7 @@
 				F200000000000000000000A9 /* VoiceManager.swift in Sources */,
 				F200000000000000000000AA /* PlacementView.swift in Sources */,
 				F200000000000000000000AB /* WorkspaceHUD.swift in Sources */,
+				F200000000000000000000E2 /* Desk2DWorkspaceView.swift in Sources */,
 				F200000000000000000000B0 /* JarvisVoice.swift in Sources */,
 				F200000000000000000000B1 /* GeminiClient.swift in Sources */,
 				F200000000000000000000B2 /* HoloElements.swift in Sources */,
@@ -415,7 +419,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -472,7 +476,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -498,7 +502,7 @@
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -528,7 +532,7 @@
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

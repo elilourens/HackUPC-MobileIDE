@@ -21,24 +21,74 @@ struct WorkspaceHUD: View {
                 .zIndex(100)
             }
 
-            // Top status pill (decorative — let taps pass through to AR view)
+            // Top bar: Scene / 2D / gesture status / Phone — single row so Scene never overlaps the gesture pill.
             VStack {
-                HStack(spacing: 10) {
-                    Circle()
-                        .fill(sessionManager.handDetected ? Color(red: 168/255, green: 173/255, blue: 179/255) : Color.gray)
-                        .frame(width: 8, height: 8)
-                    Text(gestureLabel)
-                        .font(.system(size: 14, weight: .medium))
-                        .tracking(0.6)
+                HStack(alignment: .center, spacing: 8) {
+                    Button(action: { withAnimation(.easeOut(duration: 0.2)) { scenePickerShown.toggle() } }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "sparkles.rectangle.stack")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Scene")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
                         .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
+                    }
+
+                    if sessionManager.workspaceStarted {
+                        Button(action: { sessionManager.setDeskModeEnabled(!sessionManager.deskModeEnabled) }) {
+                            Text(sessionManager.deskModeEnabled ? "AR" : "2D")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(Color.black.opacity(0.55)))
+                                .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
+                        }
+                    }
+
+                    Spacer(minLength: 6)
+
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(sessionManager.handDetected ? Color(red: 168/255, green: 173/255, blue: 179/255) : Color.gray)
+                            .frame(width: 8, height: 8)
+                        Text(sessionManager.deskModeEnabled ? "2D · pan · pinch" : handGestureLabel)
+                            .font(.system(size: 14, weight: .medium))
+                            .tracking(0.6)
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.black.opacity(0.55)))
+                    .frame(minWidth: 100)
+
+                    Spacer(minLength: 6)
+
+                    Button(action: { onRequestPhoneMode?() }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "iphone")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Phone")
+                                .font(.system(size: 11, weight: .semibold))
+                                .tracking(0.5)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
+                    }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(Color.black.opacity(0.55)))
+                .padding(.horizontal, 14)
                 .padding(.top, 56)
                 Spacer()
             }
-            .allowsHitTesting(false)
 
             // Hand skeleton overlay (bottom-left, decorative)
             HandSkeletonOverlay(points: sessionManager.handLandmarksScreen,
@@ -94,51 +144,6 @@ struct WorkspaceHUD: View {
                     .padding(.bottom, 32)
             }
 
-            // (The overlay's transition handles its own fade — we still attach a
-            // body-level animation modifier below so SwiftUI animates the
-            // workspaceStarted boolean change, otherwise the overlay would just
-            // pop out without easing.)
-
-            // Top-right "Phone" pill — taps return to the phone IDE. Decorative
-            // tinting matches the IntelliJ-Islands neutral palette.
-            VStack {
-                HStack {
-                    Button(action: { withAnimation(.easeOut(duration: 0.2)) { scenePickerShown.toggle() } }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "sparkles.rectangle.stack")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("Scene")
-                                .font(.system(size: 11, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(Capsule().fill(Color.black.opacity(0.55)))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
-                    }
-                    .padding(.top, 56)
-                    .padding(.leading, 14)
-                    Spacer()
-                    Button(action: { onRequestPhoneMode?() }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "iphone")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("Phone")
-                                .font(.system(size: 11, weight: .semibold))
-                                .tracking(0.5)
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Capsule().fill(Color.black.opacity(0.55)))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
-                    }
-                    .padding(.top, 56)
-                    .padding(.trailing, 18)
-                }
-                Spacer()
-            }
-
             if scenePickerShown {
                 VStack {
                     HStack {
@@ -158,7 +163,7 @@ struct WorkspaceHUD: View {
 
             // Preview-scroll arrows (right edge, vertically centered). Only shown
             // when there's a live preview to scroll.
-            if sessionManager.hasLivePreview && sessionManager.workspaceStarted {
+            if sessionManager.hasLivePreview && sessionManager.workspaceStarted && !sessionManager.deskModeEnabled {
                 VStack(spacing: 12) {
                     Button(action: { sessionManager.scrollPreview(dy: -300) }) {
                         previewArrow(systemName: "chevron.up")
@@ -186,36 +191,38 @@ struct WorkspaceHUD: View {
                 .zIndex(60)
             }
 
-            // Corner-resize handles for the currently selected panel.
-            ForEach(Array(sessionManager.selectedPanelCorners.enumerated()), id: \.offset) { idx, point in
-                CornerHandle(corner: idx)
-                    .position(point)
-                    .gesture(
-                        DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                            .onChanged { value in
-                                if sessionManager.scaleDragState == nil {
-                                    sessionManager.beginScaleDrag(corner: idx, location: value.startLocation)
+            // Corner-resize handles for the currently selected panel (AR only; 2D desk uses in-panel handles).
+            if !sessionManager.deskModeEnabled {
+                ForEach(Array(sessionManager.selectedPanelCorners.enumerated()), id: \.offset) { idx, point in
+                    CornerHandle(corner: idx)
+                        .position(point)
+                        .gesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                                .onChanged { value in
+                                    if sessionManager.scaleDragState == nil {
+                                        sessionManager.beginScaleDrag(corner: idx, location: value.startLocation)
+                                    }
+                                    sessionManager.updateScaleDrag(location: value.location)
                                 }
-                                sessionManager.updateScaleDrag(location: value.location)
-                            }
-                            .onEnded { value in
-                                // Throw-to-dismiss: if the predicted endpoint travels far past
-                                // the release point (i.e., a fast flick), shrink and remove the panel.
-                                let pdx = value.predictedEndLocation.x - value.location.x
-                                let pdy = value.predictedEndLocation.y - value.location.y
-                                let predictedDistance = sqrt(pdx * pdx + pdy * pdy)
-                                if predictedDistance > 220 {
-                                    sessionManager.throwDismissSelectedPanel()
+                                .onEnded { value in
+                                    // Throw-to-dismiss: if the predicted endpoint travels far past
+                                    // the release point (i.e., a fast flick), shrink and remove the panel.
+                                    let pdx = value.predictedEndLocation.x - value.location.x
+                                    let pdy = value.predictedEndLocation.y - value.location.y
+                                    let predictedDistance = sqrt(pdx * pdx + pdy * pdy)
+                                    if predictedDistance > 220 {
+                                        sessionManager.throwDismissSelectedPanel()
+                                    }
+                                    sessionManager.endScaleDrag()
                                 }
-                                sessionManager.endScaleDrag()
-                            }
-                    )
+                        )
+                }
             }
         }
         .animation(.easeInOut(duration: 0.45), value: sessionManager.workspaceStarted)
     }
 
-    private var gestureLabel: String {
+    private var handGestureLabel: String {
         switch sessionManager.currentGesture {
         case .none: return "ready"
         case .point: return "point"

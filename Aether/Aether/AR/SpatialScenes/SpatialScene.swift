@@ -47,6 +47,14 @@ enum SpatialScene: String, CaseIterable, Codable {
         }
     }
 
+    /// HDR/spatial scenes: enable ARKit person segmentation so real hands occlude the synthetic environment (works without LiDAR via `.personSegmentation`).
+    var usesPersonMaskedPassthrough: Bool {
+        switch self {
+        case .cambridge, .canaryWharf, .pretoriaGardens: return true
+        case .realWorld, .focusDark: return false
+        }
+    }
+
     var accentColor: Color {
         switch self {
         case .realWorld: return .white

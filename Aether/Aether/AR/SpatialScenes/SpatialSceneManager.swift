@@ -82,7 +82,7 @@ final class SpatialSceneManager {
         sceneAnchor = nil
     }
 
-    /// Loads `.skybox` environments: tries Xcode-compiled catalog first, then builds from bundled EXR via `generate(fromEquirectangular:)` (main-actor; may hitch on large maps).
+    /// Loads `.skybox` environments: tries Xcode-compiled catalog first, then builds from bundled EXR via `EnvironmentResource(equirectangular:withName:)`.
     private func loadSkyboxEnvironment(for scene: SpatialScene, animated: Bool) {
         guard let baseName = scene.environmentImageBaseName else { return }
 
@@ -100,7 +100,7 @@ final class SpatialSceneManager {
                 print("[SpatialScene] EnvironmentResource loaded (precompiled): \(baseName)")
             } catch {
                 print("[SpatialScene] precompiled load failed (\(baseName)): \(error.localizedDescription)")
-                env = Self.environmentResourceFromBundledEXR(scene: sceneSnapshot, baseName: baseName)
+                env = await Self.environmentResourceFromBundledEXR(scene: sceneSnapshot, baseName: baseName)
             }
 
             guard self.currentScene == sceneSnapshot else { return }
@@ -116,8 +116,8 @@ final class SpatialSceneManager {
         }
     }
 
-    /// Finds the EXR in the bundle (several paths for older installs) and converts it with RealityKit’s equirectangular generator.
-    private static func environmentResourceFromBundledEXR(scene: SpatialScene, baseName: String) -> EnvironmentResource? {
+    /// Finds the EXR in the bundle (several paths for older installs) and converts it with RealityKit’s async equirectangular initializer.
+    private static func environmentResourceFromBundledEXR(scene: SpatialScene, baseName: String) async -> EnvironmentResource? {
         guard let folder = scene.environmentSkyboxFolderName else { return nil }
         let bundle = Bundle.main
         let candidates: [URL?] = [
@@ -135,11 +135,11 @@ final class SpatialSceneManager {
             return nil
         }
         do {
-            let resource = try EnvironmentResource.generate(fromEquirectangular: cgImage, withName: baseName)
-            print("[SpatialScene] EnvironmentResource generated from EXR at \(url.path)")
+            let resource = try await EnvironmentResource(equirectangular: cgImage, withName: baseName)
+            print("[SpatialScene] EnvironmentResource built from EXR at \(url.path)")
             return resource
         } catch {
-            print("[SpatialScene] generate(fromEquirectangular:) failed: \(error.localizedDescription)")
+            print("[SpatialScene] init(equirectangular:withName:) failed: \(error.localizedDescription)")
             return nil
         }
     }
