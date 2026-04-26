@@ -95,6 +95,12 @@ final class ARSessionManager: NSObject, ObservableObject {
     /// can despawn them when the music tails off.
     private var starkHoloCards: [ModelEntity] = []
 
+    /// Mach-time of the most recent `beginWorkspace` call. Used as a grace
+    /// window for `startPlanning` so the welcome speech and any verbalized
+    /// HUD labels ("let's start") can't auto-fire a build plan during the
+    /// first few seconds of the AR session.
+    private var workspaceStartedAt: TimeInterval?
+
     // Hand-wave detection: track recent x-velocity sign changes.
     private var waveHistory: [(time: TimeInterval, sign: Int)] = []
     private var lastWaveDismissAt: TimeInterval = 0
@@ -755,18 +761,28 @@ final class ARSessionManager: NSObject, ObservableObject {
         if session.pendingPlan != nil { return }
         // Drop self-feedback loops. The AR session uses .defaultToSpeaker so
         // JARVIS's TTS leaks back into the mic, and the open-palm PTT gesture
-        // can auto-arm the recognizer at launch — so the welcome line ("Hello
-        // sir. What are we working on today?") was being parsed as a build
-        // prompt and silently firing /api/plan. Filter prompts that match the
-        // canned JARVIS phrases and reject short/empty inputs outright.
+        // can auto-arm the recognizer at launch — so welcome lines and HUD
+        // labels (e.g. "Let's start") get parsed as build prompts and silently
+        // fire /api/plan. Filter aggressively: require enough length AND word
+        // count, drop canned phrases, and gate the first few seconds after
+        // workspace start so launch-time chatter never lands a plan.
         let cleanedLower = prompt
             .lowercased()
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let letterCount = cleanedLower.unicodeScalars
             .filter { CharacterSet.letters.contains($0) }
             .count
-        guard letterCount >= 8 else {
-            appendTerminalLog(.info, "ignored short prompt")
+        let wordCount = cleanedLower.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).count
+        guard letterCount >= 14, wordCount >= 3 else {
+            appendTerminalLog(.info, "ignored short prompt: \(prompt)")
+            return
+        }
+        // Post-launch grace window: no codegen for the first 6s after
+        // `beginWorkspace`. Catches the welcome speech echoing back through
+        // the mic AND the user verbally saying "let's start" while tapping
+        // the placement HUD button — neither are real build intent.
+        if let started = workspaceStartedAt, CACurrentMediaTime() - started < 6.0 {
+            appendTerminalLog(.info, "ignored prompt during launch grace: \(prompt)")
             return
         }
         let jarvisEchoPhrases = [
@@ -775,13 +791,17 @@ final class ARSessionManager: NSObject, ObservableObject {
             "preview is live", "yes sir", "what would you like to build",
             "cancelled", "back to normal", "focus mode",
             "switching to dark mode", "going light",
+            // HUD button / placement-screen labels that get verbally read out
+            "let's start", "lets start", "let us start",
+            "open arcreact", "introducing arcreact",
+            "code anywhere", "even on your", "shake your phone",
             // "daddy's home" easter egg lines — must NOT trigger codegen
             "welcome home", "mister stark", "mr stark",
             "let's get cracking", "lets get cracking",
             "web development today", "with jetbrains"
         ]
         if jarvisEchoPhrases.contains(where: { cleanedLower.contains($0) }) {
-            appendTerminalLog(.info, "ignored TTS echo")
+            appendTerminalLog(.info, "ignored TTS/HUD echo: \(prompt)")
             return
         }
         let isModification = session.hasUserCode
@@ -931,6 +951,7 @@ final class ARSessionManager: NSObject, ObservableObject {
     func beginWorkspace() {
         guard !workspaceStarted else { return }
         workspaceStarted = true
+        workspaceStartedAt = CACurrentMediaTime()
         // Phone IDE has already seeded an initial index.html (ArcReact splash)
         // — when AR wakes up, surface that into the editor panel + preview so
         // the live IDE flow has content to render from the first frame.
@@ -1056,12 +1077,14 @@ final class ARSessionManager: NSObject, ObservableObject {
         clearStarkHoloCards()
 
         // Three cards — each at a fixed world-space offset relative to the
-        // workspace anchor so they float in a triptych above/around the desk.
-        // Sizes are in meters; positions are (x: right, y: up, z: forward).
+        // workspace anchor so they float in a tight triptych in front of the
+        // user. Sizes are in meters; positions are (x: right, y: up, z: forward).
+        // Tightened from ±0.55m → ±0.26m so all three fit in a single camera
+        // frame at the typical viewing distance.
         let cardSpecs: [(image: UIImage, position: SIMD3<Float>, size: SIMD2<Float>, delay: TimeInterval)] = [
-            (drawArcReactorCard(),    SIMD3<Float>(-0.55,  0.42, -0.05), SIMD2<Float>(0.30, 0.42), 0.05),
-            (drawStarkHelmetCard(),   SIMD3<Float>( 0.00,  0.55, -0.08), SIMD2<Float>(0.40, 0.30), 0.20),
-            (drawVitalsReadoutCard(), SIMD3<Float>( 0.55,  0.42, -0.05), SIMD2<Float>(0.30, 0.42), 0.35),
+            (drawArcReactorCard(),    SIMD3<Float>(-0.26,  0.32, -0.05), SIMD2<Float>(0.20, 0.28), 0.05),
+            (drawStarkHelmetCard(),   SIMD3<Float>( 0.00,  0.40, -0.08), SIMD2<Float>(0.28, 0.21), 0.20),
+            (drawVitalsReadoutCard(), SIMD3<Float>( 0.26,  0.32, -0.05), SIMD2<Float>(0.20, 0.28), 0.35),
         ]
 
         for spec in cardSpecs {
@@ -1070,8 +1093,8 @@ final class ARSessionManager: NSObject, ObservableObject {
                                           height: spec.size.y) else { continue }
             card.position = spec.position
             // Subtle inward yaw so each side card faces the user, not the air.
-            let yaw: Float = spec.position.x < -0.1 ? .pi / 9
-                            : spec.position.x >  0.1 ? -.pi / 9
+            let yaw: Float = spec.position.x < -0.05 ? .pi / 11
+                            : spec.position.x >  0.05 ? -.pi / 11
                             : 0
             card.transform.rotation = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
             card.scale = SIMD3<Float>(0.001, 0.001, 0.001)

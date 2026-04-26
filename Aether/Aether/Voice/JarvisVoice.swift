@@ -3,7 +3,11 @@ import AVFoundation
 
 /// ElevenLabs text-to-speech wrapper for the JARVIS voice. Caches rendered audio per
 /// canonical phrase so repeated lines (e.g. "Done.", "On it.") don't re-hit the API.
-final class JarvisVoice {
+/// Speech is **queued** — back-to-back `speak()` calls play sequentially instead of
+/// stomping on each other. Earlier the plan-summary line was getting cut off after
+/// one or two words because `speak("Shall I proceed?")` arrived while the summary
+/// was still playing and the player slot was simply reassigned.
+final class JarvisVoice: NSObject {
     static let shared = JarvisVoice()
 
     private let apiKey = Secrets.elevenLabsKey
@@ -12,8 +16,11 @@ final class JarvisVoice {
     private let lock = NSLock()
     private var cache: [String: Data] = [:]
     private var player: AVAudioPlayer?
+    /// Pending audio waiting for the current player to finish. FIFO.
+    private var queue: [Data] = []
+    private var isPlaying: Bool = false
 
-    private init() {}
+    private override init() { super.init() }
 
     /// Speak a phrase. Cached audio plays immediately; uncached audio fetches first.
     func speak(_ text: String) {
@@ -80,15 +87,38 @@ final class JarvisVoice {
     private func playOnMain(_ data: Data) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            do {
-                let p = try AVAudioPlayer(data: data)
-                p.prepareToPlay()
-                p.play()
-                self.player = p  // strong ref so it isn't deallocated mid-playback
-            } catch {
-                print("JARVIS playback error: \(error.localizedDescription)")
+            // If something is currently playing, queue this clip so it plays
+            // after the active one finishes — never interrupt mid-line.
+            if self.isPlaying {
+                self.queue.append(data)
+                return
             }
+            self.startPlayback(data)
         }
+    }
+
+    /// Spin up an AVAudioPlayer for `data`, set ourselves as the delegate so
+    /// we can chain to the next queued clip when it finishes, and play.
+    private func startPlayback(_ data: Data) {
+        do {
+            let p = try AVAudioPlayer(data: data)
+            p.delegate = self
+            p.prepareToPlay()
+            p.play()
+            self.player = p
+            self.isPlaying = true
+        } catch {
+            print("JARVIS playback error: \(error.localizedDescription)")
+            self.isPlaying = false
+            self.drainQueue()
+        }
+    }
+
+    /// Pop the next queued clip (if any) and play it.
+    private func drainQueue() {
+        guard !queue.isEmpty else { return }
+        let next = queue.removeFirst()
+        startPlayback(next)
     }
 
     private func fetch(text: String, completion: @escaping (Data?) -> Void) {
@@ -118,5 +148,26 @@ final class JarvisVoice {
             }
             completion(data)
         }.resume()
+    }
+}
+
+extension JarvisVoice: AVAudioPlayerDelegate {
+    /// Called when one queued clip finishes — pop the next from the queue
+    /// and play it, so back-to-back `speak()` calls flow as one continuous
+    /// monologue instead of interrupting each other.
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isPlaying = false
+            self.drainQueue()
+        }
+    }
+
+    func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isPlaying = false
+            self.drainQueue()
+        }
     }
 }

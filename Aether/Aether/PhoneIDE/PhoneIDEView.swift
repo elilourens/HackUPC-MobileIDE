@@ -20,6 +20,9 @@ struct PhoneIDEView: View {
     @State private var showNotifications = false
     @State private var showFindInProject = false
     @State private var showDebugConsole = false
+    @State private var showStructure = false
+    @State private var showGitTool = false
+    @State private var showBookmarks = false
     @State private var editorRatio: CGFloat = 0.62   // editor takes ~62% by default when preview is split
     @State private var dragStartRatio: CGFloat = 0.62
 
@@ -105,6 +108,15 @@ struct PhoneIDEView: View {
         }
         .sheet(isPresented: $showDebugConsole) {
             DebugConsoleSheet(session: session, isShown: $showDebugConsole)
+        }
+        .sheet(isPresented: $showStructure) {
+            StructureSheet(session: session, isShown: $showStructure)
+        }
+        .sheet(isPresented: $showGitTool) {
+            GitToolSheet(session: session, isShown: $showGitTool)
+        }
+        .sheet(isPresented: $showBookmarks) {
+            BookmarksSheet(session: session, isShown: $showBookmarks)
         }
         .onAppear {
             if session.openTabs.isEmpty {
@@ -343,8 +355,9 @@ struct PhoneIDEView: View {
             stripButton(.bookmarks, sfSymbol: "bookmark")
             stripButton(.junie, junie: true)
             Spacer()
-            // Bottom slot: terminal / problems
-            Button(action: {}) {
+            // Bottom slot: terminal — opens the Debug Console sheet (which
+            // tails the preview WebView's console output).
+            Button(action: { showDebugConsole = true }) {
                 Image(systemName: "terminal")
                     .font(.system(size: 12))
                     .foregroundColor(IJ.textSecondary)
@@ -376,8 +389,12 @@ struct PhoneIDEView: View {
                 withAnimation(.easeOut(duration: 0.22)) { sidebarShown.toggle() }
             case .junie:
                 withAnimation(.easeOut(duration: 0.22)) { showJunie.toggle() }
-            default:
-                break
+            case .structure:
+                showStructure = true
+            case .git:
+                showGitTool = true
+            case .bookmarks:
+                showBookmarks = true
             }
         }) {
             ZStack {
