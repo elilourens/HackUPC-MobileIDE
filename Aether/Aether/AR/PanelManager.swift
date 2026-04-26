@@ -964,39 +964,47 @@ final class PanelManager {
         ctx.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         ctx.strokePath()
 
-        // Sticker — JetBrains-style rounded gradient square (cyan→teal→indigo
-        // for ArcReact, matching the StarterPage splash).
+        // ArcReact logo (real PNG asset). Falls back to a gradient sticker
+        // with an "AR" monogram only if the asset is missing — should never
+        // hit for production builds since the asset ships with the bundle.
         let stickerSize = rect.height * 0.62
         let stickerRect = CGRect(x: rect.minX + 10,
                                  y: rect.midY - stickerSize / 2,
                                  width: stickerSize, height: stickerSize)
-        let stickerPath = UIBezierPath(roundedRect: stickerRect, cornerRadius: stickerSize * 0.16)
-        ctx.saveGState()
-        stickerPath.addClip()
-        let cs = CGColorSpaceCreateDeviceRGB()
-        let stops: [CGFloat] = [0.0, 0.55, 1.0]
-        let colors = [
-            UIColor(red:  28/255, green: 196/255, blue: 184/255, alpha: 1).cgColor,
-            UIColor(red:  79/255, green: 124/255, blue: 255/255, alpha: 1).cgColor,
-            UIColor(red: 124/255, green:  92/255, blue: 255/255, alpha: 1).cgColor,
-        ]
-        if let g = CGGradient(colorsSpace: cs, colors: colors as CFArray, locations: stops) {
-            ctx.drawLinearGradient(g,
-                                   start: CGPoint(x: stickerRect.minX, y: stickerRect.minY),
-                                   end:   CGPoint(x: stickerRect.maxX, y: stickerRect.maxY),
-                                   options: [])
+        if let logo = UIImage(named: "ArcReactLogo")?.cgImage {
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: stickerRect.maxY + stickerRect.minY)
+            ctx.scaleBy(x: 1, y: -1)
+            ctx.draw(logo, in: stickerRect)
+            ctx.restoreGState()
+        } else {
+            let stickerPath = UIBezierPath(roundedRect: stickerRect, cornerRadius: stickerSize * 0.16)
+            ctx.saveGState()
+            stickerPath.addClip()
+            let cs = CGColorSpaceCreateDeviceRGB()
+            let stops: [CGFloat] = [0.0, 0.55, 1.0]
+            let colors = [
+                UIColor(red:  28/255, green: 196/255, blue: 184/255, alpha: 1).cgColor,
+                UIColor(red:  79/255, green: 124/255, blue: 255/255, alpha: 1).cgColor,
+                UIColor(red: 124/255, green:  92/255, blue: 255/255, alpha: 1).cgColor,
+            ]
+            if let g = CGGradient(colorsSpace: cs, colors: colors as CFArray, locations: stops) {
+                ctx.drawLinearGradient(g,
+                                       start: CGPoint(x: stickerRect.minX, y: stickerRect.minY),
+                                       end:   CGPoint(x: stickerRect.maxX, y: stickerRect.maxY),
+                                       options: [])
+            }
+            ctx.restoreGState()
+            let monoFont = UIFont.systemFont(ofSize: stickerSize * 0.42, weight: .heavy)
+            let monoStr = NSAttributedString(string: "AR", attributes: [
+                .font: monoFont,
+                .foregroundColor: UIColor.white,
+                .kern: -0.5
+            ])
+            let monoSize = monoStr.size()
+            monoStr.draw(at: CGPoint(x: stickerRect.midX - monoSize.width / 2,
+                                     y: stickerRect.midY - monoSize.height / 2 - 0.5))
         }
-        ctx.restoreGState()
-        // "AR" monogram on the sticker.
-        let monoFont = UIFont.systemFont(ofSize: stickerSize * 0.42, weight: .heavy)
-        let monoStr = NSAttributedString(string: "AR", attributes: [
-            .font: monoFont,
-            .foregroundColor: UIColor.white,
-            .kern: -0.5
-        ])
-        let monoSize = monoStr.size()
-        monoStr.draw(at: CGPoint(x: stickerRect.midX - monoSize.width / 2,
-                                 y: stickerRect.midY - monoSize.height / 2 - 0.5))
 
         // Wordmark + filename row.
         let wordmark = NSAttributedString(string: "ArcReact", attributes: [
@@ -1446,15 +1454,97 @@ final class PanelManager {
             tx = closeCenter.x + closeSize / 2 + 22
         }
 
-        // Code area geometry.
+        // Code area geometry. Density bumped from /22 → /34 so code panes
+        // show ~50% more lines and individual chars are smaller (audience
+        // viewing in AR couldn't read 22-line view from a meter+ away).
         let codeTop = tabBarRect.maxY + 14
         let codeBottom = workBottom
-        let codeFontSize = (codeBottom - codeTop) / 22
+        let codeFontSize = (codeBottom - codeTop) / 34
         let codeFont = UIFont.monospacedSystemFont(ofSize: codeFontSize, weight: .regular)
-        let lineNumWidth: CGFloat = codeFontSize * 2.4
+        let lineNumWidth: CGFloat = codeFontSize * 2.6
         let xCodeLeft = codeAreaLeft
         let xCodeText = xCodeLeft + lineNumWidth + 12
+        let codeRightEdge = size.width - outerPad - 6
+        let lineHeight = codeFontSize * 1.38
+        let wrapIndent = codeFontSize * 2.0   // hanging indent for wrapped continuations
         var y = codeTop
+
+        // Helper: draw a tokenized line with soft-wrapping. Returns the new y
+        // after rendering. Wraps on whitespace where possible, hard-wraps in
+        // the middle of a long token only as a last resort. The line number
+        // is drawn ONCE on the first row; continuation rows get blank gutter.
+        func drawWrappedTokens(_ tokens: [(String, TokenKind)], startY: CGFloat,
+                               lineNumberStr: String) -> CGFloat {
+            var curY = startY
+            var dx = xCodeText
+            var firstRow = true
+
+            // Line number gutter on the first row.
+            NSAttributedString(string: lineNumberStr, attributes: [
+                .font: codeFont,
+                .foregroundColor: JB.lineNumber
+            ]).draw(at: CGPoint(x: xCodeLeft, y: curY))
+            ctx.setStrokeColor(JB.border.cgColor)
+            ctx.setLineWidth(0.5)
+            ctx.move(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: curY - 2))
+            ctx.addLine(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: curY + codeFontSize + 2))
+            ctx.strokePath()
+
+            for (text, kind) in tokens {
+                let color: UIColor = jbColorForToken(kind)
+                // Split the token on whitespace boundaries so we can wrap
+                // between words. Whitespace runs are kept as their own
+                // chunks so spacing stays correct.
+                var pending = text
+                while !pending.isEmpty {
+                    let attr = NSAttributedString(string: pending, attributes: [
+                        .font: codeFont,
+                        .foregroundColor: color
+                    ])
+                    let w = attr.size().width
+                    if dx + w <= codeRightEdge {
+                        attr.draw(at: CGPoint(x: dx, y: curY))
+                        dx += w
+                        pending = ""
+                        continue
+                    }
+                    // Doesn't fit on the current row. Try to break on the
+                    // last whitespace position that fits; if no such break,
+                    // break at the largest character count that fits.
+                    let chars = Array(pending)
+                    var fitCount = 0
+                    var lastSpaceIdx = -1
+                    for i in 0..<chars.count {
+                        let candidate = String(chars[0...i])
+                        let cw = NSAttributedString(string: candidate, attributes: [.font: codeFont]).size().width
+                        if dx + cw > codeRightEdge { break }
+                        fitCount = i + 1
+                        if chars[i] == " " || chars[i] == "\t" { lastSpaceIdx = i + 1 }
+                    }
+                    if fitCount == 0 {
+                        // Already at margin — wrap to next row before drawing.
+                        curY += lineHeight
+                        if curY > codeBottom - codeFontSize { return curY }
+                        firstRow = false
+                        dx = xCodeText + (firstRow ? 0 : wrapIndent)
+                        continue
+                    }
+                    let breakAt = lastSpaceIdx > 0 ? lastSpaceIdx : fitCount
+                    let head = String(chars[0..<breakAt])
+                    NSAttributedString(string: head, attributes: [
+                        .font: codeFont,
+                        .foregroundColor: color
+                    ]).draw(at: CGPoint(x: dx, y: curY))
+                    pending = String(chars[breakAt..<chars.count])
+                    // Move to next row with hanging indent.
+                    curY += lineHeight
+                    if curY > codeBottom - codeFontSize { return curY }
+                    firstRow = false
+                    dx = xCodeText + wrapIndent
+                }
+            }
+            return curY + lineHeight
+        }
 
         if let live = liveCode {
             let allLines = live.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
@@ -1465,7 +1555,7 @@ final class PanelManager {
                 lastLine = min(count, allLines.count)
             } else {
                 firstLine = min(max(0, editorScrollOffset), max(0, allLines.count - 1))
-                let visibleCap = max(8, Int((codeBottom - codeTop) / (codeFontSize * 1.42)))
+                let visibleCap = max(8, Int((codeBottom - codeTop) / lineHeight))
                 lastLine = min(allLines.count, firstLine + visibleCap + 4)
             }
             let linesToRender = firstLine < lastLine ? Array(allLines[firstLine..<lastLine]) : []
@@ -1486,30 +1576,9 @@ final class PanelManager {
                 else if line.contains("<script") { currentLang = .js }
                 else if line.contains("</script>") { currentLang = .html }
 
-                NSAttributedString(string: String(format: "%3d", absIdx + 1), attributes: [
-                    .font: codeFont,
-                    .foregroundColor: JB.lineNumber
-                ]).draw(at: CGPoint(x: xCodeLeft, y: y))
-
-                // Subtle gutter divider in the JetBrains border color.
-                ctx.setStrokeColor(JB.border.cgColor)
-                ctx.setLineWidth(0.5)
-                ctx.move(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: y - 2))
-                ctx.addLine(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: y + codeFontSize + 2))
-                ctx.strokePath()
-
                 let tokens = tokenizeWeb(line: line, lang: currentLang)
-                var dx = xCodeText
-                for (text, kind) in tokens {
-                    let color: UIColor = jbColorForToken(kind)
-                    let attr = NSAttributedString(string: text, attributes: [
-                        .font: codeFont,
-                        .foregroundColor: color
-                    ])
-                    attr.draw(at: CGPoint(x: dx, y: y))
-                    dx += attr.size().width
-                }
-                y += codeFontSize * 1.42
+                y = drawWrappedTokens(tokens, startY: y,
+                                      lineNumberStr: String(format: "%3d", absIdx + 1))
                 if y > codeBottom - codeFontSize { break }
             }
         } else {
@@ -1532,29 +1601,9 @@ final class PanelManager {
                 "}"
             ]
             for (idx, line) in allLines.enumerated() {
-                NSAttributedString(string: String(format: "%2d", idx + 1), attributes: [
-                    .font: codeFont,
-                    .foregroundColor: JB.lineNumber
-                ]).draw(at: CGPoint(x: xCodeLeft, y: y))
-
-                ctx.setStrokeColor(JB.border.cgColor)
-                ctx.setLineWidth(0.5)
-                ctx.move(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: y - 2))
-                ctx.addLine(to: CGPoint(x: xCodeLeft + lineNumWidth + 4, y: y + codeFontSize + 2))
-                ctx.strokePath()
-
                 let tokens = tokenize(line: line)
-                var dx = xCodeText
-                for (text, kind) in tokens {
-                    let color: UIColor = jbColorForToken(kind)
-                    let attr = NSAttributedString(string: text, attributes: [
-                        .font: codeFont,
-                        .foregroundColor: color
-                    ])
-                    attr.draw(at: CGPoint(x: dx, y: y))
-                    dx += attr.size().width
-                }
-                y += codeFontSize * 1.42
+                y = drawWrappedTokens(tokens, startY: y,
+                                      lineNumberStr: String(format: "%2d", idx + 1))
                 if y > codeBottom - codeFontSize { break }
             }
         }

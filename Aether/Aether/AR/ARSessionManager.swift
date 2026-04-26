@@ -5,6 +5,7 @@ import Combine
 import simd
 import UIKit
 import Vision
+import AVFoundation
 
 @MainActor
 final class ARSessionManager: NSObject, ObservableObject {
@@ -86,6 +87,13 @@ final class ARSessionManager: NSObject, ObservableObject {
     var scaleDragState: ScaleDragState?
     private var lastSwipeTime: TimeInterval = 0
     private var aiResetWorkItem: DispatchWorkItem?
+
+    /// Iron-Man easter egg audio player. Held strongly so it isn't deallocated
+    /// mid-playback. Reset to nil between plays so the user can re-trigger.
+    private var daddysHomePlayer: AVAudioPlayer?
+    /// Floating Stark holo cards spawned alongside the easter egg. Held so we
+    /// can despawn them when the music tails off.
+    private var starkHoloCards: [ModelEntity] = []
 
     // Hand-wave detection: track recent x-velocity sign changes.
     private var waveHistory: [(time: TimeInterval, sign: Int)] = []
@@ -307,6 +315,14 @@ final class ARSessionManager: NSObject, ObservableObject {
     @discardableResult
     func placeWorkspace() -> Bool {
         guard !workspacePlaced, let arView = arView, let transform = placementTransform else { return false }
+
+        // Defensive: a previous run may have left a stale plan in memory (e.g.
+        // a planning request raced with app suspension). Always start the AR
+        // workspace with a clean slate so the user never sees an unsolicited
+        // "JUNIE EXECUTION PLAN" card on first launch.
+        session.pendingPlan = nil
+        session.isPlanning = false
+        session.pendingPlanIsModification = false
 
         hidePlacementIndicator()
 
@@ -593,6 +609,15 @@ final class ARSessionManager: NSObject, ObservableObject {
         case .save:
             JarvisVoice.shared.speak("Saved to project.")
             appendTerminalLog(.command, "save")
+        case .goToPhoneIDE:
+            // Leave AR. ContentView wires this callback to flip the top-level
+            // phase back to the phone IDE. JARVIS acks first so the user knows
+            // the swap is intentional and isn't a crash.
+            JarvisVoice.shared.speak("Switching to the phone editor.")
+            appendTerminalLog(.command, "exit ar → phone ide")
+            onRequestPhoneMode?()
+        case .daddysHome:
+            playDaddysHomeEasterEgg()
         case .showPreview:
             panelManager?.showPanel(.preview)
             JarvisVoice.shared.speak("Pulling up the preview now.")
@@ -728,6 +753,37 @@ final class ARSessionManager: NSObject, ObservableObject {
     func startPlanning(prompt: String) {
         // Don't start a new plan if one is already pending awaiting confirmation.
         if session.pendingPlan != nil { return }
+        // Drop self-feedback loops. The AR session uses .defaultToSpeaker so
+        // JARVIS's TTS leaks back into the mic, and the open-palm PTT gesture
+        // can auto-arm the recognizer at launch — so the welcome line ("Hello
+        // sir. What are we working on today?") was being parsed as a build
+        // prompt and silently firing /api/plan. Filter prompts that match the
+        // canned JARVIS phrases and reject short/empty inputs outright.
+        let cleanedLower = prompt
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let letterCount = cleanedLower.unicodeScalars
+            .filter { CharacterSet.letters.contains($0) }
+            .count
+        guard letterCount >= 8 else {
+            appendTerminalLog(.info, "ignored short prompt")
+            return
+        }
+        let jarvisEchoPhrases = [
+            "hello sir", "what are we working on", "listening",
+            "shall i proceed", "working on a plan", "on it", "done",
+            "preview is live", "yes sir", "what would you like to build",
+            "cancelled", "back to normal", "focus mode",
+            "switching to dark mode", "going light",
+            // "daddy's home" easter egg lines — must NOT trigger codegen
+            "welcome home", "mister stark", "mr stark",
+            "let's get cracking", "lets get cracking",
+            "web development today", "with jetbrains"
+        ]
+        if jarvisEchoPhrases.contains(where: { cleanedLower.contains($0) }) {
+            appendTerminalLog(.info, "ignored TTS echo")
+            return
+        }
         let isModification = session.hasUserCode
         let trimmed = prompt.count > 64 ? String(prompt.prefix(64)) + "…" : prompt
         appendTerminalLog(.command, trimmed)
@@ -894,6 +950,491 @@ final class ARSessionManager: NSObject, ObservableObject {
         }
     }
 
+    /// "Daddy's home" easter egg — the Iron-Man tribute. The whole desk
+    /// collapses to nothing, AC/DC kicks in, JARVIS greets Mr. Stark a beat
+    /// later, then the workspace re-conjures with a hardcoded Stark-themed
+    /// site loaded into the preview panel. Pure showmanship.
+    private func playDaddysHomeEasterEgg() {
+        appendTerminalLog(.command, "daddy's home 🦾")
+
+        // 1) Collapse every panel. The base panels keep their `basePanelsMaterialized`
+        //    flag set so we can't re-call materializeBasePanels — instead we
+        //    re-animate each one individually.
+        let allKinds: [PanelKind] = [.assistant, .editor, .fileTree, .terminal,
+                                      .preview, .docs, .terry]
+        for kind in allKinds {
+            panelManager?.hidePanel(kind)
+        }
+
+        // 2) Spawn the Stark holo cards (arc reactor / helmet / vitals readout)
+        //    so the workspace doesn't go totally empty during the music
+        //    intro — three floating Marvel-esque AR HUD panels fill the void.
+        spawnStarkHoloCards()
+
+        // 3) Music. Bundled mp3 — falls back silently if the file is missing
+        //    so the rest of the easter egg still fires.
+        if let url = Bundle.main.url(forResource: "daddy_home", withExtension: "mp3") {
+            do {
+                let player = try AVAudioPlayer(contentsOf: url)
+                player.prepareToPlay()
+                player.volume = 1.0
+                player.play()
+                daddysHomePlayer = player
+            } catch {
+                appendTerminalLog(.error, "daddy's home audio failed: \(error.localizedDescription)")
+            }
+        } else {
+            appendTerminalLog(.error, "daddy_home.mp3 not bundled")
+        }
+
+        // 3) ~3.5s in — long enough for the AC/DC riff to land before
+        //    JARVIS speaks over it. Duck the music gently (over 2s) so the
+        //    transition into JARVIS isn't an abrupt cut.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
+            self?.fadeDaddysHomeMusic(to: 0.22, duration: 2.0)
+            JarvisVoice.shared.speak("Welcome home, Mister Stark. Let's get cracking on some web development today, with JetBrains.")
+        }
+
+        // 4) Push the Stark-themed page into editor + preview, then re-conjure
+        //    the panels in sync with the greeting. ~5.5s lets the AC/DC sting
+        //    breathe before the workspace blooms back.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.5) { [weak self] in
+            guard let self = self else { return }
+            self.session.setCode(StarkTributePage.html,
+                                 forFile: "stark.html",
+                                 pushHistory: true,
+                                 recordEdit: false,
+                                 editType: "easter_egg")
+            self.session.switchTo(file: "stark.html")
+            // Mark the Stark page as throwaway demo content so the next user
+            // prompt routes through generate() rather than modify(). Without
+            // this, GPT gets fed the hardcoded Stark HTML as "current code"
+            // and tries to mutate it instead of building what the user asked
+            // for, which produces garbage output.
+            self.session.markCurrentBufferAsDemo()
+            self.panelManager?.setEditorCode(StarkTributePage.html, animated: true)
+            self.panelManager?.setLiveFiles(active: "stark.html",
+                                            files: Array(self.session.projectFiles.keys).sorted())
+            let order: [(PanelKind, TimeInterval)] = [
+                (.assistant, 0.00),
+                (.editor,    0.18),
+                (.terminal,  0.36),
+                (.fileTree,  0.50),
+                (.preview,   0.70),
+            ]
+            for (kind, delay) in order {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.panelManager?.showPanel(kind)
+                }
+            }
+            self.loadAndApplyPreview(code: StarkTributePage.html, settleDelay: 0.8)
+            self.appendTerminalLog(.success, "stark.html · workspace re-conjured")
+        }
+
+        // 5) Final fade-out — long, slow tail so the sting bleeds off into
+        //    silence rather than getting yanked. ~6s of fade buys plenty of
+        //    breathing room for JARVIS's line + the panel re-conjure
+        //    animation to land before the music is fully gone. Stark holo
+        //    cards despawn near the end of the fade.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 9.0) { [weak self] in
+            self?.fadeDaddysHomeMusic(to: 0.0, duration: 6.0) { [weak self] in
+                self?.daddysHomePlayer?.stop()
+                self?.daddysHomePlayer = nil
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 13.0) { [weak self] in
+            self?.clearStarkHoloCards()
+        }
+    }
+
+    /// Spawn the three floating Stark holo cards (Arc Reactor / Helmet HUD /
+    /// Vitals Readout) around the workspace, each with a staggered fade-in
+    /// scale. Called at the start of the easter egg so they bloom in alongside
+    /// the music.
+    private func spawnStarkHoloCards() {
+        guard let anchor = workspaceAnchor else { return }
+        clearStarkHoloCards()
+
+        // Three cards — each at a fixed world-space offset relative to the
+        // workspace anchor so they float in a triptych above/around the desk.
+        // Sizes are in meters; positions are (x: right, y: up, z: forward).
+        let cardSpecs: [(image: UIImage, position: SIMD3<Float>, size: SIMD2<Float>, delay: TimeInterval)] = [
+            (drawArcReactorCard(),    SIMD3<Float>(-0.55,  0.42, -0.05), SIMD2<Float>(0.30, 0.42), 0.05),
+            (drawStarkHelmetCard(),   SIMD3<Float>( 0.00,  0.55, -0.08), SIMD2<Float>(0.40, 0.30), 0.20),
+            (drawVitalsReadoutCard(), SIMD3<Float>( 0.55,  0.42, -0.05), SIMD2<Float>(0.30, 0.42), 0.35),
+        ]
+
+        for spec in cardSpecs {
+            guard let card = makeHoloCard(image: spec.image,
+                                          width: spec.size.x,
+                                          height: spec.size.y) else { continue }
+            card.position = spec.position
+            // Subtle inward yaw so each side card faces the user, not the air.
+            let yaw: Float = spec.position.x < -0.1 ? .pi / 9
+                            : spec.position.x >  0.1 ? -.pi / 9
+                            : 0
+            card.transform.rotation = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
+            card.scale = SIMD3<Float>(0.001, 0.001, 0.001)
+            anchor.addChild(card)
+            starkHoloCards.append(card)
+
+            // Stagger the bloom — overshoot then settle, mirroring the panel
+            // materialize animation.
+            let target = Transform(scale: SIMD3<Float>(1.06, 1.06, 1.06),
+                                   rotation: card.transform.rotation,
+                                   translation: card.position)
+            DispatchQueue.main.asyncAfter(deadline: .now() + spec.delay) { [weak card, weak anchor] in
+                guard let card = card, let anchor = anchor else { return }
+                card.move(to: target, relativeTo: anchor, duration: 0.55, timingFunction: .easeOut)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { [weak card, weak anchor] in
+                    guard let card = card, let anchor = anchor else { return }
+                    let settle = Transform(scale: SIMD3<Float>(1, 1, 1),
+                                           rotation: card.transform.rotation,
+                                           translation: card.position)
+                    card.move(to: settle, relativeTo: anchor, duration: 0.20, timingFunction: .easeIn)
+                }
+            }
+        }
+    }
+
+    /// Despawn all Stark holo cards with a 0.4s shrink-out, then remove them
+    /// from the scene graph and drop our strong refs.
+    private func clearStarkHoloCards() {
+        for card in starkHoloCards {
+            let parent = card.parent
+            let target = Transform(scale: SIMD3<Float>(0.001, 0.001, 0.001),
+                                   rotation: card.transform.rotation,
+                                   translation: card.transform.translation)
+            card.move(to: target, relativeTo: parent, duration: 0.40, timingFunction: .easeIn)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) { [weak card] in
+                card?.parent?.removeChild(card!)
+            }
+        }
+        starkHoloCards.removeAll()
+    }
+
+    /// Build a flat ModelEntity textured with `image`. Unlit + double-sided so
+    /// it reads as a holographic card regardless of camera angle.
+    private func makeHoloCard(image: UIImage, width: Float, height: Float) -> ModelEntity? {
+        guard let cg = image.cgImage,
+              let texture = try? TextureResource.generate(from: cg, options: .init(semantic: .color))
+        else { return nil }
+        var material = UnlitMaterial(color: .white)
+        material.color = .init(tint: .white, texture: .init(texture))
+        material.blending = .transparent(opacity: .init(floatLiteral: 1.0))
+        let mesh = MeshResource.generatePlane(width: width, height: height)
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        return entity
+    }
+
+    /// Card 1 — pulsing arc-reactor disc with "MK LXXXV" label. Drawn with
+    /// Core Graphics so it has zero dependency on bundled assets.
+    private func drawArcReactorCard() -> UIImage {
+        let size = CGSize(width: 600, height: 840)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            // Background — deep void with hot-rod red corner glow.
+            cg.setFillColor(UIColor(red: 0.04, green: 0.04, blue: 0.06, alpha: 1).cgColor)
+            cg.fill(CGRect(origin: .zero, size: size))
+            let glow = CGGradient(colorsSpace: nil,
+                                  colors: [UIColor(red: 0.78, green: 0.07, blue: 0.13, alpha: 0.45).cgColor,
+                                           UIColor.clear.cgColor] as CFArray,
+                                  locations: [0, 1])!
+            cg.drawRadialGradient(glow,
+                                  startCenter: CGPoint(x: size.width/2, y: size.height*0.42),
+                                  startRadius: 0,
+                                  endCenter: CGPoint(x: size.width/2, y: size.height*0.42),
+                                  endRadius: size.width*0.55, options: [])
+
+            // Arc reactor — concentric rings with cyan core.
+            let cx = size.width/2, cy = size.height*0.42
+            let outer = CGRect(x: cx - 200, y: cy - 200, width: 400, height: 400)
+            cg.setStrokeColor(UIColor(red: 0.49, green: 0.86, blue: 1, alpha: 0.6).cgColor)
+            cg.setLineWidth(2)
+            cg.strokeEllipse(in: outer)
+            cg.setStrokeColor(UIColor(red: 0.49, green: 0.86, blue: 1, alpha: 0.85).cgColor)
+            cg.setLineWidth(2.5)
+            cg.strokeEllipse(in: outer.insetBy(dx: 32, dy: 32))
+            cg.setStrokeColor(UIColor(red: 0.6, green: 0.92, blue: 1, alpha: 0.7).cgColor)
+            cg.setLineWidth(1.5)
+            cg.strokeEllipse(in: outer.insetBy(dx: 64, dy: 64))
+
+            // Core glow.
+            let coreGradient = CGGradient(colorsSpace: nil,
+                                          colors: [UIColor(red: 0.87, green: 0.98, blue: 1, alpha: 1).cgColor,
+                                                   UIColor(red: 0.49, green: 0.86, blue: 1, alpha: 0.95).cgColor,
+                                                   UIColor(red: 0.11, green: 0.36, blue: 0.55, alpha: 0.85).cgColor] as CFArray,
+                                          locations: [0, 0.45, 1])!
+            cg.drawRadialGradient(coreGradient,
+                                  startCenter: CGPoint(x: cx, y: cy),
+                                  startRadius: 0,
+                                  endCenter: CGPoint(x: cx, y: cy),
+                                  endRadius: 130, options: [])
+
+            // Spoke ticks — the 8 little radial dashes around a real arc reactor.
+            cg.setStrokeColor(UIColor(red: 0.78, green: 0.95, blue: 1, alpha: 0.85).cgColor)
+            cg.setLineWidth(3)
+            for i in 0..<8 {
+                let a = CGFloat(i) * .pi / 4
+                let x1 = cx + cos(a) * 145, y1 = cy + sin(a) * 145
+                let x2 = cx + cos(a) * 175, y2 = cy + sin(a) * 175
+                cg.move(to: CGPoint(x: x1, y: y1))
+                cg.addLine(to: CGPoint(x: x2, y: y2))
+                cg.strokePath()
+            }
+
+            // Top-left HUD label.
+            let mono = UIFont.monospacedSystemFont(ofSize: 18, weight: .bold)
+            let red = UIColor(red: 1, green: 0.16, blue: 0.27, alpha: 1)
+            ("// ARC REACTOR · ONLINE" as NSString)
+                .draw(at: CGPoint(x: 36, y: 32),
+                      withAttributes: [.font: mono, .foregroundColor: red])
+
+            // Bottom MK badge.
+            let bigDisplay = UIFont.systemFont(ofSize: 84, weight: .heavy)
+            let mkText = "MK · LXXXV" as NSString
+            let mkSize = mkText.size(withAttributes: [.font: bigDisplay])
+            mkText.draw(at: CGPoint(x: (size.width - mkSize.width)/2, y: size.height - 220),
+                        withAttributes: [.font: bigDisplay,
+                                         .foregroundColor: UIColor.white])
+            let sub = UIFont.monospacedSystemFont(ofSize: 16, weight: .semibold)
+            let subText = "BLEEDING-EDGE NANO ARMOR" as NSString
+            let subSize = subText.size(withAttributes: [.font: sub])
+            subText.draw(at: CGPoint(x: (size.width - subSize.width)/2, y: size.height - 130),
+                         withAttributes: [.font: sub,
+                                          .foregroundColor: UIColor(white: 0.65, alpha: 1)])
+
+            // Corner brackets.
+            drawCornerBrackets(in: cg, rect: CGRect(origin: .zero, size: size).insetBy(dx: 18, dy: 18),
+                               color: red, length: 28)
+        }
+    }
+
+    /// Card 2 — wide Iron Man helmet silhouette with glowing eye slits and a
+    /// targeting reticle. Centerpiece of the triptych.
+    private func drawStarkHelmetCard() -> UIImage {
+        let size = CGSize(width: 800, height: 600)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            // Hot-rod red top fade → black bottom.
+            let bgGrad = CGGradient(colorsSpace: nil,
+                                    colors: [UIColor(red: 0.18, green: 0.02, blue: 0.04, alpha: 1).cgColor,
+                                             UIColor(red: 0.04, green: 0.04, blue: 0.06, alpha: 1).cgColor] as CFArray,
+                                    locations: [0, 1])!
+            cg.drawLinearGradient(bgGrad,
+                                  start: .zero,
+                                  end: CGPoint(x: 0, y: size.height),
+                                  options: [])
+
+            // Helmet silhouette — stylized hexagonal mask shape.
+            let cx = size.width/2, cy = size.height*0.55
+            let helmet = UIBezierPath()
+            helmet.move(to: CGPoint(x: cx - 130, y: cy - 150))
+            helmet.addLine(to: CGPoint(x: cx + 130, y: cy - 150))
+            helmet.addLine(to: CGPoint(x: cx + 175, y: cy - 60))
+            helmet.addLine(to: CGPoint(x: cx + 165, y: cy + 90))
+            helmet.addCurve(to: CGPoint(x: cx, y: cy + 175),
+                            controlPoint1: CGPoint(x: cx + 140, y: cy + 160),
+                            controlPoint2: CGPoint(x: cx + 70, y: cy + 175))
+            helmet.addCurve(to: CGPoint(x: cx - 165, y: cy + 90),
+                            controlPoint1: CGPoint(x: cx - 70, y: cy + 175),
+                            controlPoint2: CGPoint(x: cx - 140, y: cy + 160))
+            helmet.addLine(to: CGPoint(x: cx - 175, y: cy - 60))
+            helmet.close()
+
+            UIColor(red: 0.78, green: 0.07, blue: 0.13, alpha: 1).setFill()
+            helmet.fill()
+            // Helmet outline
+            cg.setStrokeColor(UIColor(red: 0.96, green: 0.77, blue: 0.19, alpha: 1).cgColor)
+            cg.setLineWidth(3)
+            helmet.stroke()
+
+            // Eye slits — angled trapezoids glowing white.
+            cg.saveGState()
+            cg.setShadow(offset: .zero, blur: 18,
+                         color: UIColor(red: 1, green: 1, blue: 1, alpha: 0.95).cgColor)
+            UIColor.white.setFill()
+            let leftEye = UIBezierPath()
+            leftEye.move(to: CGPoint(x: cx - 95, y: cy - 30))
+            leftEye.addLine(to: CGPoint(x: cx - 28, y: cy - 32))
+            leftEye.addLine(to: CGPoint(x: cx - 25, y: cy - 12))
+            leftEye.addLine(to: CGPoint(x: cx - 90, y: cy - 8))
+            leftEye.close()
+            leftEye.fill()
+            let rightEye = UIBezierPath()
+            rightEye.move(to: CGPoint(x: cx + 28, y: cy - 32))
+            rightEye.addLine(to: CGPoint(x: cx + 95, y: cy - 30))
+            rightEye.addLine(to: CGPoint(x: cx + 90, y: cy - 8))
+            rightEye.addLine(to: CGPoint(x: cx + 25, y: cy - 12))
+            rightEye.close()
+            rightEye.fill()
+            cg.restoreGState()
+
+            // Mouth grille — stylized horizontal bars.
+            cg.setStrokeColor(UIColor(red: 0.96, green: 0.77, blue: 0.19, alpha: 0.85).cgColor)
+            cg.setLineWidth(2)
+            for i in 0..<3 {
+                let y = cy + 80 + CGFloat(i) * 14
+                cg.move(to: CGPoint(x: cx - 50, y: y))
+                cg.addLine(to: CGPoint(x: cx + 50, y: y))
+                cg.strokePath()
+            }
+
+            // Top label.
+            let mono = UIFont.monospacedSystemFont(ofSize: 18, weight: .bold)
+            let red = UIColor(red: 1, green: 0.27, blue: 0.4, alpha: 1)
+            ("// HALL OF ARMOR · BAY 04" as NSString)
+                .draw(at: CGPoint(x: 32, y: 28),
+                      withAttributes: [.font: mono, .foregroundColor: red])
+            let topRight = "HUD · TARGETING" as NSString
+            let trSize = topRight.size(withAttributes: [.font: mono])
+            topRight.draw(at: CGPoint(x: size.width - trSize.width - 32, y: 28),
+                          withAttributes: [.font: mono,
+                                           .foregroundColor: UIColor(red: 1, green: 0.84, blue: 0.32, alpha: 1)])
+
+            // Reticle ring around helmet center (subtle).
+            cg.setStrokeColor(UIColor(red: 1, green: 0.84, blue: 0.32, alpha: 0.35).cgColor)
+            cg.setLineWidth(1)
+            cg.strokeEllipse(in: CGRect(x: cx - 220, y: cy - 220, width: 440, height: 440))
+
+            drawCornerBrackets(in: cg, rect: CGRect(origin: .zero, size: size).insetBy(dx: 18, dy: 18),
+                               color: red, length: 28)
+        }
+    }
+
+    /// Card 3 — vertical HUD vitals stack ("REPULSORS ONLINE / FLIGHT READY /
+    /// JARVIS SYNCED") plus a sweep waveform underneath.
+    private func drawVitalsReadoutCard() -> UIImage {
+        let size = CGSize(width: 600, height: 840)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            cg.setFillColor(UIColor(red: 0.04, green: 0.04, blue: 0.06, alpha: 1).cgColor)
+            cg.fill(CGRect(origin: .zero, size: size))
+
+            // Faint hot-rod red bottom glow.
+            let glow = CGGradient(colorsSpace: nil,
+                                  colors: [UIColor.clear.cgColor,
+                                           UIColor(red: 0.78, green: 0.07, blue: 0.13, alpha: 0.4).cgColor] as CFArray,
+                                  locations: [0, 1])!
+            cg.drawLinearGradient(glow, start: CGPoint(x: 0, y: size.height*0.4),
+                                  end: CGPoint(x: 0, y: size.height), options: [])
+
+            // Top label.
+            let mono = UIFont.monospacedSystemFont(ofSize: 18, weight: .bold)
+            let red = UIColor(red: 1, green: 0.16, blue: 0.27, alpha: 1)
+            ("// SYSTEMS · DIAGNOSTICS" as NSString)
+                .draw(at: CGPoint(x: 32, y: 28),
+                      withAttributes: [.font: mono, .foregroundColor: red])
+
+            // Stacked vitals rows.
+            let vitals: [(String, String, UIColor)] = [
+                ("REPULSORS",  "ONLINE",   UIColor(red: 0.42, green: 0.85, blue: 0.5, alpha: 1)),
+                ("FLIGHT",     "READY",    UIColor(red: 0.42, green: 0.85, blue: 0.5, alpha: 1)),
+                ("JARVIS",     "SYNCED",   UIColor(red: 0.42, green: 0.85, blue: 0.5, alpha: 1)),
+                ("ARC CORE",   "3.2 GW",   UIColor(red: 0.49, green: 0.86, blue: 1, alpha: 1)),
+                ("VITALS",     "ALL GREEN",UIColor(red: 0.42, green: 0.85, blue: 0.5, alpha: 1)),
+                ("THREATS",    "NONE",     UIColor(red: 0.96, green: 0.77, blue: 0.19, alpha: 1)),
+            ]
+            let labelFont = UIFont.systemFont(ofSize: 22, weight: .bold)
+            let valueFont = UIFont.monospacedSystemFont(ofSize: 22, weight: .semibold)
+            var y: CGFloat = 110
+            for (label, value, color) in vitals {
+                // Status dot.
+                cg.setFillColor(color.cgColor)
+                cg.fillEllipse(in: CGRect(x: 36, y: y + 8, width: 12, height: 12))
+                // Label.
+                (label as NSString).draw(at: CGPoint(x: 60, y: y),
+                                         withAttributes: [.font: labelFont,
+                                                          .foregroundColor: UIColor.white])
+                // Value (right-aligned).
+                let v = value as NSString
+                let vSize = v.size(withAttributes: [.font: valueFont])
+                v.draw(at: CGPoint(x: size.width - vSize.width - 36, y: y),
+                       withAttributes: [.font: valueFont, .foregroundColor: color])
+                // Divider.
+                cg.setStrokeColor(UIColor(red: 0.78, green: 0.07, blue: 0.13, alpha: 0.35).cgColor)
+                cg.setLineWidth(1)
+                cg.move(to: CGPoint(x: 36, y: y + 44))
+                cg.addLine(to: CGPoint(x: size.width - 36, y: y + 44))
+                cg.strokePath()
+                y += 70
+            }
+
+            // Waveform sweep at bottom.
+            cg.setStrokeColor(UIColor(red: 0.49, green: 0.86, blue: 1, alpha: 0.85).cgColor)
+            cg.setLineWidth(2)
+            cg.beginPath()
+            let waveTop: CGFloat = size.height - 180
+            let waveBaseline = waveTop + 50
+            cg.move(to: CGPoint(x: 36, y: waveBaseline))
+            for x in stride(from: CGFloat(36), through: size.width - 36, by: 4) {
+                let phase = (x / 30) * .pi
+                let amp = sin(phase) * 18 + sin(phase * 1.7) * 8
+                cg.addLine(to: CGPoint(x: x, y: waveBaseline + amp))
+            }
+            cg.strokePath()
+
+            // Footer.
+            let footerFont = UIFont.monospacedSystemFont(ofSize: 16, weight: .semibold)
+            let footer = "// I AM IRON MAN" as NSString
+            let fSize = footer.size(withAttributes: [.font: footerFont])
+            footer.draw(at: CGPoint(x: (size.width - fSize.width)/2, y: size.height - 80),
+                        withAttributes: [.font: footerFont,
+                                         .foregroundColor: red])
+
+            drawCornerBrackets(in: cg, rect: CGRect(origin: .zero, size: size).insetBy(dx: 18, dy: 18),
+                               color: red, length: 28)
+        }
+    }
+
+    /// Stark-style L-shaped corner brackets — used on every holo card for
+    /// consistent HUD chrome.
+    private func drawCornerBrackets(in cg: CGContext, rect: CGRect, color: UIColor, length: CGFloat) {
+        cg.setStrokeColor(color.cgColor)
+        cg.setLineWidth(2)
+        let r = rect
+        // Top-left
+        cg.move(to: CGPoint(x: r.minX, y: r.minY + length))
+        cg.addLine(to: CGPoint(x: r.minX, y: r.minY))
+        cg.addLine(to: CGPoint(x: r.minX + length, y: r.minY))
+        // Top-right
+        cg.move(to: CGPoint(x: r.maxX - length, y: r.minY))
+        cg.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+        cg.addLine(to: CGPoint(x: r.maxX, y: r.minY + length))
+        // Bottom-right
+        cg.move(to: CGPoint(x: r.maxX, y: r.maxY - length))
+        cg.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        cg.addLine(to: CGPoint(x: r.maxX - length, y: r.maxY))
+        // Bottom-left
+        cg.move(to: CGPoint(x: r.minX + length, y: r.maxY))
+        cg.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+        cg.addLine(to: CGPoint(x: r.minX, y: r.maxY - length))
+        cg.strokePath()
+    }
+
+    /// Smooth volume taper for the easter-egg player. Steps every 50ms so the
+    /// fade reads as continuous; calls `completion` once the target volume is
+    /// reached.
+    private func fadeDaddysHomeMusic(to target: Float,
+                                     duration: TimeInterval,
+                                     completion: (() -> Void)? = nil) {
+        guard let player = daddysHomePlayer else { completion?(); return }
+        let steps = max(1, Int(duration / 0.05))
+        let start = player.volume
+        let delta = (target - start) / Float(steps)
+        for i in 1...steps {
+            let when = DispatchTime.now() + 0.05 * Double(i)
+            DispatchQueue.main.asyncAfter(deadline: when) { [weak player] in
+                guard let player = player else { return }
+                player.volume = max(0, min(1, start + delta * Float(i)))
+                if i == steps { completion?() }
+            }
+        }
+    }
+
     func runFakeAIResponse() {
         let firstResponse = "Got it. Working on that now..."
         let secondResponse = "Done. Changes applied to Login.tsx"
@@ -1033,14 +1574,18 @@ extension ARSessionManager {
         let gesture = gestureInterpreter.interpret(landmarks: result)
         currentGesture = gesture
 
-        // OPEN-PALM = push-to-talk. Activate after 150ms of continuous palm so a brief
-        // accidental flash of an open hand doesn't trigger it; deactivate 300ms after
-        // the palm goes away so a frame of jittery detection doesn't cut you off.
+        // OPEN-PALM = push-to-talk. Activate after 600ms of continuous palm so a brief
+        // accidental flash of an open hand (e.g. user holding the phone with fingers
+        // visible to the camera at startup) doesn't trigger it; deactivate 300ms
+        // after the palm goes away so a frame of jittery detection doesn't cut
+        // you off. The longer activation window also prevents the AR welcome
+        // speech ("Hello sir. What are we working on today?") from being
+        // captured as a build prompt via the speaker→mic feedback loop.
         let now = CACurrentMediaTime()
         if gesture == .openPalm {
             if palmFirstSeenAt == nil { palmFirstSeenAt = now }
             palmLastSeenAt = now
-            if !pttGestureActive, now - (palmFirstSeenAt ?? now) > 0.15 {
+            if !pttGestureActive, now - (palmFirstSeenAt ?? now) > 0.6 {
                 pttGestureActive = true
                 onPushToTalkChange?(true)
             }

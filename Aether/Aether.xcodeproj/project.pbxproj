@@ -19,6 +19,7 @@
 		F200000000000000000000AA /* PlacementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000AA /* PlacementView.swift */; };
 		F200000000000000000000AB /* WorkspaceHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000AB /* WorkspaceHUD.swift */; };
 		F200000000000000000000AC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000AC /* Assets.xcassets */; };
+		FAC0000000000000000000A1 /* daddy_home.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = FBC0000000000000000000A1 /* daddy_home.mp3 */; };
 		F200000000000000000000B0 /* JarvisVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B0 /* JarvisVoice.swift */; };
 		F200000000000000000000B1 /* JarvisAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B1 /* JarvisAssistant.swift */; };
 		F200000000000000000000B2 /* HoloElements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000B2 /* HoloElements.swift */; };
@@ -26,6 +27,7 @@
 		F200000000000000000000C0 /* ProjectSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C0 /* ProjectSession.swift */; };
 		F200000000000000000000C1 /* CodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C1 /* CodeGenerator.swift */; };
 		F200000000000000000000C2 /* PreviewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C2 /* PreviewRenderer.swift */; };
+		FAC0000000000000000000A2 /* StarkTributePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC0000000000000000000A2 /* StarkTributePage.swift */; };
 		F200000000000000000000C3 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000C3 /* Secrets.swift */; };
 		F200000000000000000000D0 /* IJTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D0 /* IJTheme.swift */; };
 		F200000000000000000000D1 /* MonacoEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F100000000000000000000D1 /* MonacoEditorView.swift */; };
@@ -59,6 +61,7 @@
 		F100000000000000000000AA /* PlacementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacementView.swift; sourceTree = "<group>"; };
 		F100000000000000000000AB /* WorkspaceHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHUD.swift; sourceTree = "<group>"; };
 		F100000000000000000000AC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		FBC0000000000000000000A1 /* daddy_home.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = daddy_home.mp3; sourceTree = "<group>"; };
 		F100000000000000000000AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F100000000000000000000AE /* Aether.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Aether.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F100000000000000000000B0 /* JarvisVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JarvisVoice.swift; sourceTree = "<group>"; };
@@ -68,6 +71,7 @@
 		F100000000000000000000C0 /* ProjectSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectSession.swift; sourceTree = "<group>"; };
 		F100000000000000000000C1 /* CodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeGenerator.swift; sourceTree = "<group>"; };
 		F100000000000000000000C2 /* PreviewRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRenderer.swift; sourceTree = "<group>"; };
+		FBC0000000000000000000A2 /* StarkTributePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarkTributePage.swift; sourceTree = "<group>"; };
 		F100000000000000000000C3 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		F100000000000000000000D0 /* IJTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IJTheme.swift; sourceTree = "<group>"; };
 		F100000000000000000000D1 /* MonacoEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonacoEditorView.swift; sourceTree = "<group>"; };
@@ -183,6 +187,7 @@
 			children = (
 				F100000000000000000000AC /* Assets.xcassets */,
 				F100000000000000000000DB /* JBIcons */,
+				FBC0000000000000000000A1 /* daddy_home.mp3 */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -202,6 +207,7 @@
 				F100000000000000000000C1 /* CodeGenerator.swift */,
 				F100000000000000000000C2 /* PreviewRenderer.swift */,
 				F100000000000000000000C3 /* Secrets.swift */,
+				FBC0000000000000000000A2 /* StarkTributePage.swift */,
 			);
 			path = Project;
 			sourceTree = "<group>";
@@ -300,6 +306,7 @@
 			files = (
 				F200000000000000000000AC /* Assets.xcassets in Resources */,
 				F200000000000000000000DB /* JBIcons in Resources */,
+				FAC0000000000000000000A1 /* daddy_home.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -328,6 +335,7 @@
 				F200000000000000000000C0 /* ProjectSession.swift in Sources */,
 				F200000000000000000000C1 /* CodeGenerator.swift in Sources */,
 				F200000000000000000000C2 /* PreviewRenderer.swift in Sources */,
+				FAC0000000000000000000A2 /* StarkTributePage.swift in Sources */,
 				F200000000000000000000C3 /* Secrets.swift in Sources */,
 				F200000000000000000000D0 /* IJTheme.swift in Sources */,
 				F200000000000000000000D1 /* MonacoEditorView.swift in Sources */,

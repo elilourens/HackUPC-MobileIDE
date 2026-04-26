@@ -851,6 +851,10 @@ def _bundle_react_preview(files: dict[str, str]) -> str:
         f"// === {path} ===\n{_strip_es_modules(content)}"
         for path, content in jsx_files
     )
+    # Escape any literal `</script>` so it can't prematurely close our
+    # `<script id="__user_jsx" type="text/plain">` envelope. Models do
+    # occasionally emit raw `</script>` in JSX strings.
+    bundled = bundled.replace("</script>", "<\\/script>")
 
     # CSS the model wrote — inline it. Tailwind handles 90% of styling but
     # raw rules (e.g. custom keyframes) belong on the page.
@@ -881,10 +885,17 @@ def _bundle_react_preview(files: dict[str, str]) -> str:
     }},
   }};
 </script>
-<script src="https://cdn.tailwindcss.com" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin="anonymous"></script>
+<!-- IMPORTANT: do NOT add `crossorigin="anonymous"` to these tags.
+     `cdn.tailwindcss.com` returns a 302 redirect without CORS headers, so
+     the browser refuses to execute the response when `crossorigin` is set
+     and Tailwind never runs (= no classes get styled). We don't need
+     crossorigin for error visibility either: our wrapper below uses direct
+     eval() in a same-origin inline script, so any thrown error has a
+     readable message + stack regardless of CDN script origin. -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   /* Base dark-theme fallback so the page still looks intentional even if
@@ -919,37 +930,117 @@ def _bundle_react_preview(files: dict[str, str]) -> str:
     }}
   }}, true);
 </script>
-<script type="text/babel" data-presets="react">
-  // Hoist every common React hook + Fragment up so user code can call them
-  // without an explicit import. The bundler stripped the imports.
-  const React = window.React;
-  const ReactDOM = window.ReactDOM;
-  const {{ useState, useEffect, useRef, useMemo, useCallback,
-           useLayoutEffect, useReducer, useContext, useId,
-           createContext, forwardRef, memo, Fragment }} = React;
-  const ReactDOMClient = ReactDOM;
-
+<!--
+  User JSX as plain text — NOT auto-compiled by Babel. We compile + eval
+  inline below so any compile or runtime error is thrown from THIS inline
+  script (same-origin), giving us a real message + stack instead of the
+  cross-origin-sanitized "Script error." Babel-standalone normally evals
+  inside its own script context which makes the resulting errors opaque.
+-->
+<script id="__user_jsx" type="text/plain">
 {bundled}
-
-  // Boot. `App` is whatever the bundled src/App.jsx defined.
-  const __mount = document.getElementById('root');
-  function __boot() {{
-    try {{
-      if (typeof App !== 'function') {{
-        __mount.innerHTML = '<div style="padding:40px;font-family:system-ui;color:#f87171">Preview error: <code>App</code> component not found in the bundled source.</div>';
-        return;
+</script>
+<script>
+  (function () {{
+    const __mount = document.getElementById('root');
+    function __formatErr(err) {{
+      if (!err) return String(err);
+      const parts = [];
+      if (err.message) parts.push(err.message);
+      if (err.name && err.name !== 'Error' && !err.message)
+        parts.push(err.name);
+      if (err.stack) parts.push(err.stack);
+      if (parts.length === 0) {{
+        try {{ parts.push(JSON.stringify(err, null, 2)); }} catch (_) {{ parts.push(String(err)); }}
       }}
-      const node = React.createElement(App);
+      return parts.join('\\n');
+    }}
+    function __paintError(label, err) {{
+      const msg = __formatErr(err);
+      console.error(label + ':', msg);
+      __mount.innerHTML =
+        '<pre style="padding:24px;color:#f87171;font:12px ui-monospace,monospace;white-space:pre-wrap;background:#0a0a0a">' +
+        label + ':\\n' + msg.replace(/[<&]/g, function(c){{return c==='<'?'&lt;':'&amp;';}}) +
+        '</pre>';
+    }}
+
+    // Hoist common React hooks at the script's top level so direct `eval`
+    // below sees them in scope. We can't pass them as Function args because
+    // `new Function` strips source-map info from runtime errors; eval keeps
+    // it (with a sourceURL directive) so stack traces show user-jsx.js:LINE.
+    const React = window.React;
+    const ReactDOM = window.ReactDOM;
+    if (!React || !ReactDOM) {{
+      __paintError('React CDN failed to load', new Error('window.React or window.ReactDOM is undefined'));
+      return;
+    }}
+    const {{ useState, useEffect, useRef, useMemo, useCallback,
+             useLayoutEffect, useReducer, useContext, useId,
+             createContext, forwardRef, memo, Fragment }} = React;
+    const ReactDOMClient = ReactDOM;
+
+    const src = document.getElementById('__user_jsx').textContent;
+
+    // Compile JSX → plain JS via Babel-standalone. Compile errors land here
+    // with the real Babel message (line/column/snippet).
+    let compiled;
+    try {{
+      if (!window.Babel) throw new Error('Babel-standalone failed to load');
+      compiled = window.Babel.transform(src, {{
+        presets: [['react', {{ runtime: 'classic' }}]],
+        sourceType: 'script',
+      }}).code;
+    }} catch (err) {{
+      __paintError('Babel compile failed', err);
+      return;
+    }}
+
+    // Direct `eval` (NOT `new Function`) so:
+    //   1. Stack traces preserve real line numbers
+    //   2. The `//# sourceURL=user-jsx.js` directive makes WebKit attribute
+    //      errors to that synthetic file in devtools and stack frames
+    //   3. The user's components run in the same scope as our hoisted
+    //      React/hooks, so they don't need imports
+    // A small post-fix copies any top-level `App` ref into a window slot so
+    // we can read it back out here; const-in-eval doesn't leak otherwise.
+    //
+    // IMPORTANT: do NOT declare a local `App` in this scope — Safari's eval
+    // throws "Can't create duplicate variable" when the eval'd code contains
+    // `function App()` or `const App = …` and the same name already exists
+    // in the calling scope.
+    let __ResolvedApp;
+    try {{
+      const augmented =
+        compiled +
+        '\\n;try {{ if (typeof App !== "undefined") window.__APP_REF = App; }} catch(_){{}}' +
+        '\\n//# sourceURL=user-jsx.js';
+      delete window.__APP_REF;
+      // eslint-disable-next-line no-eval
+      eval(augmented);
+      __ResolvedApp = window.__APP_REF;
+      delete window.__APP_REF;
+    }} catch (err) {{
+      __paintError('JSX eval failed', err);
+      return;
+    }}
+
+    if (typeof __ResolvedApp !== 'function') {{
+      __paintError('App not found',
+        new Error('Bundled source did not declare a top-level `App` component.'));
+      return;
+    }}
+
+    try {{
+      const node = React.createElement(__ResolvedApp);
       if (ReactDOMClient.createRoot) {{
         ReactDOMClient.createRoot(__mount).render(node);
       }} else {{
         ReactDOMClient.render(node, __mount);
       }}
     }} catch (err) {{
-      __mount.innerHTML = '<pre style="padding:24px;color:#f87171;font:12px ui-monospace,monospace;white-space:pre-wrap">Preview crashed:\\n' + (err && err.stack || err) + '</pre>';
+      __paintError('React render crashed', err);
     }}
-  }}
-  __boot();
+  }})();
 </script>
 </body>
 </html>"""

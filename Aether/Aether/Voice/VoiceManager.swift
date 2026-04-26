@@ -57,6 +57,11 @@ enum VoiceCommand: Equatable {
     case runPreview
     /// Save (demo no-op — JARVIS just acknowledges).
     case save
+    /// Leave AR mode and return to the phone IDE ("go to regular coding").
+    case goToPhoneIDE
+    /// Iron-Man easter egg ("daddy's home"). Closes panels, plays the AC/DC
+    /// sting, then JARVIS greets Mr. Stark and the workspace re-conjures.
+    case daddysHome
 }
 
 @MainActor
@@ -493,6 +498,29 @@ final class VoiceManager: ObservableObject {
         // REVIEW CODE
         if lower.contains("review this") || lower.contains("review code") || lower.contains("review my code") {
             return .reviewCode
+        }
+
+        // EASTER EGG — "wake up, daddy's home" (the original Tony Stark quote
+        // from Iron Man 3) and its shorter variants. Must run BEFORE the
+        // codegen fallback or the phrase gets eaten as a build prompt.
+        if lower.contains("wake up daddy's home") || lower.contains("wake up daddys home")
+            || lower.contains("wake up daddies home") || lower.contains("wake up daddy is home")
+            || lower.contains("wake up, daddy's home") || lower.contains("wake up, daddys home")
+            || lower.contains("daddy's home") || lower.contains("daddys home")
+            || lower.contains("daddies home") || lower.contains("daddy is home")
+            || lower == "daddy home" {
+            return .daddysHome
+        }
+
+        // SWITCH TO PHONE IDE — leave AR mode entirely. Multiple natural
+        // phrasings since the user might say either "regular" or "normal"
+        // and either "coding" or "view"/"mode"/"ide".
+        if lower.contains("regular coding") || lower.contains("regular view")
+            || lower.contains("regular ide") || lower.contains("normal coding")
+            || lower.contains("normal view") || lower.contains("phone ide")
+            || lower.contains("phone mode") || lower == "go to phone"
+            || lower == "back to phone" || lower == "exit ar" || lower == "leave ar" {
+            return .goToPhoneIDE
         }
 
         // CLEAR ERRORS

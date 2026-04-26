@@ -263,6 +263,15 @@ final class ProjectSession: ObservableObject {
         modifiedFiles.remove(file)
     }
 
+    /// Stamp the current buffer as throwaway demo content. Used by the
+    /// "daddy's home" easter egg: after the Stark tribute page writes itself
+    /// into the editor we flip this flag back on so the next user prompt is
+    /// routed through `generate` (fresh project) rather than `modify` (which
+    /// would feed the hardcoded Stark HTML to GPT and produce garbage).
+    func markCurrentBufferAsDemo() {
+        isSeededDemoContent = true
+    }
+
     /// Atomically install a multi-file project — the result of a Junie build
     /// or modify call. `replace: true` wipes the existing project (fresh
     /// generation), `replace: false` merges the returned files on top of the

@@ -111,7 +111,7 @@ struct AgentPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if session.chatMessages.isEmpty {
-                        Text("Ask ArcReact to build something. Try: \"a landing page for a coffee subscription startup\".")
+                        Text("Ask Junie to build something. Try: \"a landing page for a coffee subscription startup\".")
                             .font(.system(size: 12))
                             .foregroundColor(IJ.textSecondary)
                             .padding(.horizontal, 14)
@@ -142,7 +142,7 @@ struct AgentPanel: View {
             HStack(spacing: 8) {
                 ZStack(alignment: .leading) {
                     if draft.isEmpty {
-                        Text("Ask ArcReact…")
+                        Text("Ask Junie…")
                             .font(.system(size: 13))
                             .foregroundColor(IJ.textDisabled)
                             .padding(.leading, 12)
